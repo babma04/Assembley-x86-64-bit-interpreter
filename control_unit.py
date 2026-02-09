@@ -77,12 +77,12 @@ class Control_Unit:
         self.op1_size: int = 0  # size must be 0 if self.op1 = None
         self.op1_value: int = 0 # value must be 0 if self.op1 = None
         self.op1_address: int | None = None # address must be None if self.op1 is not a memory operand
-        self.op1_type: str | None = None # type must be None if self.op1 = None, otherwise it must be either 'register'/'memory'/'constant'/'immediate'
+        self.op1_type: str | None = None # type must be None if self.op1 = None, otherwise it must be either 'direct memory'/'base memory'/'indexed memory'/'address'/'register'/'constant'/'immediate'
         self.op2: str | None = None
         self.op2_size: int = 0  # size must be 0 if self.op2 = None
         self.op2_value: int = 0 # value must be 0 if self.op2 = None
         self.op2_address: int | None = None # address must be None if self.op2 is not a memory operand
-        self.op2_type: str | None = None # type must be None if self.op2 = None, otherwise it must be either 'register'/'memory'/'constant'/'immediate'
+        self.op2_type: str | None = None # type must be None if self.op2 = None, otherwise it must be either 'direct memory'/'base memory'/'indexed memory'/'address'/'register'/'constant'/'immediate'
         self.valid_instructions: dict[str, dict[str, int]] = Storage.read_valid_instructions(validation_file_name)
 
     def run(self) -> None:
@@ -99,10 +99,8 @@ class Control_Unit:
         # 1. Gets the instruction, operands and funtional unit in use and verifies it's compatibility it the operator count of the instruction
         self.fetch()
         # current_instruction will only be 'None' if rip points to a label in .text (which should be skiped)
-        if self.curretent_instruction != None:
-            # 2. Verifies if the instruction-operand set is valid
-            self.interprete()
-            # 3. Conducts execution to a correct F.U. and executes the operation 
+        if self.current_instruction != None:
+            # 2. Verifies if the instruction-operand set is valid and triggers the execution of the instruction in the respective funtional unit
             self.execute()
             # 4. Verifies if the execution generated any type of side effects of flags and halted state and updates them
             self.validate_execution_state()
@@ -127,9 +125,11 @@ class Control_Unit:
             self.curretent_instruction = line[0]
             try:
                 self.validate_operands(line)
+                self.set_operand_type(line)
+                self.set_operand_value_and_address(line)
             except ValueError as e:
                 print(f"Error at line {self.rip}: {e}")
-                self.curretent_instruction = None
+                self.current_instruction = None
                 self.finished = True
                 
             if self.valid_operand_count():
@@ -170,23 +170,14 @@ class Control_Unit:
         if instruction_length == 1:
             try:
                 self.set_operand("both", None, 0)
-                self.set_operand_type("both", None)
-                self.set_operand_value("both", 0)
-                self.set_operand_address("both", None)
             except ValueError as e:
                 raise ValueError(e)
             
         elif instruction_length == 2:
             self.set_operand("op2", None, 0)
-            self.set_operand_value("op2", 0)
-            self.set_operand_address("op2", None)
             try:
                 operand_info: list[str] = self.get_operand(line[1])
                 self.set_operand("op1", operand_info[0], int(operand_info[1]))
-                self.set_operand_type("op1", operand_info[0])
-                operand_value_and_address: list[int | None] = self.set_operand_value_and_address(operand_info[0], int(operand_info[1]))
-                self.set_operand_value("op1", operand_value_and_address[0]) # type: ignore  - operand value is always int, but the function signature requires it to be int | None
-                self.set_operand_address("op1", operand_value_and_address[1])
             except ValueError as e:
                 self.set_operand("op1", None, 0)
                 raise ValueError(e)
@@ -321,6 +312,126 @@ class Control_Unit:
             self.op2_size = size
         else:
             raise ValueError(f"INVALID OPERAND IDENTIFIER {operand} USED. IT SHOULD BE EITHER 'both'/'op1'/'op2'!")
+        
+    def set_operand_type(self, line: list[str]) -> None:
+        """
+        Attribute a type to the operand type attributes based on the operand expression
+        
+        :param line: List of strings representing the instruction line
+        :type line: list[str]
+        :raises ValueError: If an invalid label is found during operand type determination
+        """
+        if self.op1 != None:
+            try:
+                self.op1_type = self.determine_operand_type(self.op1)
+            except ValueError as e:
+                raise ValueError(e)
+        if self.op2 != None:
+            try:
+                self.op2_type = self.determine_operand_type(self.op2)
+            except ValueError as e:
+                raise ValueError(e)
+    
+    def determine_operand_type(self, operand: str) -> str:
+        """
+        Determines the operand type based on its expression by going through the possible operand types and verifying if the expression matches any of them.        
+
+        :param operand: Expression for the operand to determine the type
+        :type operand: str
+        :return: Description of the operand type (either 'direct memory'/'base memory'/'indexed memory'/'address'/'register'/'constant'/'immediate')
+        :rtype: str
+        :raises ValueError: If an invalid label is found during operand type determination or if the operand does not match any valid type
+        """
+        if self.is_direct_memory_addressing(operand):
+            return 'direct memory'
+        elif self.is_base_addessing(operand):
+            return 'base memory'
+        elif self.is_indexed_addressing(operand):
+            return 'indexed memory'
+        elif self.is_address(operand):
+            return 'address'
+        elif self.is_register(operand):
+            return 'register'
+        elif self.is_constant(operand):
+            return 'constant'
+        elif self.is_immediate_value(operand):
+            return 'immediate'
+        else:
+            # should never happen
+            raise ValueError(f"UNABLE TO DETERMINE OPERAND TYPE FOR {operand} AT LINE {self.rip}!")
+    
+    def set_operand_value_and_address(self, line: list[str]) -> None:
+        """
+        Attribute a value and address to the operand value and address attributes based on the operand expression and type
+        
+        :param line: List of strings representing the instruction line
+        :type line: list[str]
+        :raises ValueError: If an invalid label is found during operand value or address determination
+        """
+        if self.op1 != None:
+            try:
+                op1_info: list[int | None]= self.determine_operand_value_and_address(self.op1, self.op1_type, self.memory)
+                self.set_operand_value("op1", op1_info[0])  # type: ignore
+                self.set_operand_address("op1", op1_info[1])
+            except ValueError as e:
+                raise ValueError(e)
+        if self.op2 != None:
+            try:
+                op2_info: list[int | None]= self.determine_operand_value_and_address(self.op2, self.op2_type, self.memory)
+                self.set_operand_value("op2", op2_info[0]) # type: ignore
+                self.set_operand_address("op2", op2_info[1])
+            except ValueError as e:
+                raise ValueError(e)
+    
+    def determine_operand_value_and_address(self, operand: str, operand_type: str | None, memory: Data_Memory) -> list[int | None]:
+        """
+        Determines the operand value and address based on its expression and type by going through the possible operand types and calculating the value and address accordingly.        
+
+        :param operand: Expression for the operand to determine the value and address
+        :type operand: str
+        :param operand_type: Type of the operand to determine the value and address
+        :type operand_type: str | None
+        :param memory: Data memory instance to retrieve values from memory operands
+        :type memory: Data_Memory
+        :return: List containing the operand value and address (address is None if not a memory operand)
+        :rtype: list[int | None]
+        :raises ValueError: If an invalid label is found during operand value or address determination or if the operand type is invalid
+        """
+        if operand_type == 'direct memory':
+            address: int = self.calculate_memory_address(operand)
+            value: int = memory.read(address, self.op1_size)  # type: ignore
+            return [value, address]
+        elif operand_type == 'base memory':
+            address: int = self.calculate_memory_address(operand)
+            value: bytes = memory.read_bytes(address, self.op1_size)  # type: ignore
+            return [value, address]
+        elif operand_type == 'indexed memory':
+            address: int = self.calculate_memory_address(operand)
+            value: bytes = memory.read_bytes(address, self.op1_size)  # type: ignore
+            return [value, address]
+        elif operand_type == 'address':
+            if re.match(self.CONSTANTS_AND_LABELS_PATTERN, operand):
+                try:
+                    address: int = self.get_label_address(operand)
+                    return [address, None]
+                except ValueError as e:
+                    raise ValueError(e)
+            else:
+                # should never happen
+                raise ValueError(f"INVALID ADDRESS OPERAND {operand} AT LINE {self.rip}!")
+        elif operand_type == 'register':
+            value: bytes = self.registers[operand]  # type: ignore
+            return [value, None]
+        elif operand_type == 'constant':
+            value: bytes = self.constants[operand]  # type: ignore
+            return [value, None]
+        elif operand_type == 'immediate':
+            value: bytes = self.parse_immediate_value(operand)    # Only supports direct decimal or string values, no calculations
+            return [value, None]
+        else:
+            # should never happen
+            raise ValueError(f"INVALID OPERAND TYPE {operand_type} AT LINE {self.rip}!")
+
 
     def set_operand_value(self, operand:str, value: int) -> None:
         """
@@ -361,83 +472,6 @@ class Control_Unit:
             self.op2_address = address
         else:
             raise ValueError(f"INVALID OPERAND IDENTIFIER {operand} USED. IT SHOULD BE EITHER 'both'/'op1'/'op2'!")
-        
-    def set_operand_type(self, operand: str, operand_expression: str | None) -> None:
-        """
-        Attribute a type to the operand type attributes by verifying the operand expression type
-
-        :param operand: Expression for the operand to update (both/op1/op2)
-        :type operand: str
-        :param operand_expression: Unaltered expression used to refer to the operand
-        :type operand_expression: str
-        :raises ValueError: If an invalid operand identifier is used or if the operand expression is invalid
-        """
-        type: str | None = None
-
-        if operand_expression == None:
-            type = None
-        elif self.is_direct_memory_addressing(operand_expression):
-            type = "direct memory"
-        elif self.is_base_addessing(operand_expression):
-            type = "base memory"
-        elif self.is_indexed_addressing(operand_expression):
-            type = "indexed memory"
-        elif self.is_address(operand_expression):
-            type = "address"
-        elif self.is_register(operand_expression):
-            type = "register"
-        elif self.is_constant(operand_expression):
-            type = "constant"
-        elif self.is_immediate_value(operand_expression):
-            type = "immediate"
-        else:
-            raise ValueError(f"INVALID OPERAND EXPRESSION {operand_expression} AT LINE {self.rip}!")
-        
-        if operand == "both":
-            self.op1_type = type
-            self.op2_type = type
-        elif operand == "op1":
-            self.op1_type = type
-        elif operand == "op2":
-            self.op2_type = type
-        else:
-            raise ValueError(f"INVALID OPERAND IDENTIFIER {operand} USED. IT SHOULD BE EITHER 'both'/'op1'/'op2'!")
-
-        
-    def set_operand_value_and_address(self, operand: str, expression: str, size: int) -> list[int | None]:
-        """
-        Retrieves the value and address of the operand based on its expression and size.\n
-        Goes through all the possible operand types and verifies if the given operand matches any of them. Else will raise an error.
-        Acts as a dispatcher to the specific operand type value and address retrievers.
-
-        :param operand: Expression for the operand to retrieve 
-        :type operand: str
-        :param expression: Unaltered expression used to refer to the operand
-        :type expression: str
-        :param size: Size of the operand (must be calculated)
-        :type size: int
-        :return: List containing the operand value and address (None if not a memory operand) if valid, otherwise an empty list
-        :rtype: list[int | None]
-        :raises ValueError: If the operand is invalid or if an invalid label is found during retrieval
-        """
-        value: int = 0
-        address: int | None = None
-
-        if self.is_memory_addressing(expression):
-            address: int = self.calculate_memory_address(expression)
-            value: int = self.memory.read(address, size)
-        elif self.is_address(expression):
-            value: int = self.calculate_memory_address(expression)
-        elif self.is_register(expression):
-            value: int = self.registers[expression]
-        elif self.is_constant(expression):
-            value: int = self.constants[expression]
-        elif self.is_immediate_value(expression):
-            value: int = int(expression, 0)
-        else:
-            raise ValueError(f"INVALID OPERAND EXPRESSION {expression} AT LINE {self.rip}!")
-        return [value, address]
-
     
     def is_memory_addressing(self, expression: str) -> bool:
         """
@@ -597,11 +631,6 @@ class Control_Unit:
         if re.match(fr'^{self.IMMEDIATE_VALUE_PATTERN}$', expression):
             return True
         return False
-    
-    def calculate_memory_address(self, expression: str) -> int:
-        ...
-    
-    def 
     
     def get_label_size(self, label: str) -> int:
         """

@@ -44,12 +44,12 @@ class Segment_Mapper:
     TOKENS_PATTERN = r"""(?x)
         ".*?"|'.*?'|                  # Strings
         \[.*?\]|                      # Memory access
+        \(.*?\)|                      # Parenthesized expressions
         0x[\da-fA-F]+|                # Hex Prefix
         \d+[\da-fA-F]*[hH]|           # Hex Suffix
         [01]+[bB]|                    # Binary
         [a-zA-Z_]\w*|                 # Instructions / Registers / Labels
-        [-+]?\d+                           # Signed Decimals
-        [\+\-\*\/\(\)]|               # Operators and Parentises
+        [-+]?\d+                      # Signed Decimals
     """
 
     ELEMENTS_TO_SKIP = r'^[,\s]+$'  # Commas and whitespace to skip during parsing
