@@ -29,6 +29,10 @@
         ex.: 
         - What to avoid: ((4+3+1)*4 + 6 + (7 + 8)*2)
         - Correct version: 58
+    - All immidiate values should be integer values (not decimal point values)
+        ex.:
+        - What to avoid: mov eax, 3.14
+        - Correct version: mov eax, 3
 
 
 ## Folder Structure

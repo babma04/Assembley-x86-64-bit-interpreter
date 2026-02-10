@@ -383,7 +383,7 @@ class Control_Unit:
             except ValueError as e:
                 raise ValueError(e)
     
-    def determine_operand_value_and_address(self, operand: str, operand_type: str | None, memory: Data_Memory) -> list[int | None]:
+    def determine_operand_value_and_address(self, operand: str, operand_type: str | None, memory: Data_Memory) -> list[bytes | int | None]:
         """
         Determines the operand value and address based on its expression and type by going through the possible operand types and calculating the value and address accordingly.        
 
@@ -399,15 +399,15 @@ class Control_Unit:
         """
         if operand_type == 'direct memory':
             address: int = self.calculate_memory_address(operand)
-            value: int = memory.read(address, self.op1_size)  # type: ignore
+            value: bytes = memory.read_bytes(address, self.op1_size)  
             return [value, address]
         elif operand_type == 'base memory':
             address: int = self.calculate_memory_address(operand)
-            value: bytes = memory.read_bytes(address, self.op1_size)  # type: ignore
+            value: bytes = memory.read_bytes(address, self.op1_size)  
             return [value, address]
         elif operand_type == 'indexed memory':
             address: int = self.calculate_memory_address(operand)
-            value: bytes = memory.read_bytes(address, self.op1_size)  # type: ignore
+            value: bytes = memory.read_bytes(address, self.op1_size)  
             return [value, address]
         elif operand_type == 'address':
             if re.match(self.CONSTANTS_AND_LABELS_PATTERN, operand):
@@ -589,7 +589,7 @@ class Control_Unit:
                 raise ValueError(f"INVALID LABEL {expression} AT LINE {self.rip}!")
             else:
                 return True
-        elif re.match(fr'^{self.IMMEDIATE_VALUE_PATTERN}$', expression):
+        elif re.match(fr'^{self.NUMBER_REPRESENTATION_PATTERN}$', expression):
             return True
         return False
     
@@ -665,3 +665,255 @@ class Control_Unit:
         if self.op2 != None:
             actual_operand_count += 1
         return expected_operand_count == actual_operand_count    
+    
+    def calculate_memory_address(self, expression: str) -> int:
+        """
+        Calculates the memory address from a given memory addressing expression by going through the possible memory addressing modes and calculating the address accordingly.
+        
+        :param expression: Expression for the memory operand to calculate the address
+        :type expression: str
+        :return: The calculated memory address
+        :rtype: int
+        :raises ValueError: If an invalid label is found in the expression or if the memory addressing mode is invalid
+        """
+        if self.is_direct_memory_addressing(expression):
+            return self.calculate_direct_memory_address(expression)
+        elif self.is_base_addessing(expression):
+            return self.calculate_base_memory_address(expression)
+        elif self.is_indexed_addressing(expression):
+            return self.calculate_indexed_memory_address(expression)
+        else:
+            # should never happen
+            raise ValueError(f"INVALID MEMORY ADDRESSING MODE {expression} AT LINE {self.rip}!")
+    
+
+    def calculate_direct_memory_address(self, expression: str) -> int:
+
+        new_expression: str = expression.replace(" ", "").replace("[", "").replace("]", "")
+        components: list[str] = re.split(r'([\+\-])', new_expression)
+
+        parsed_address_expression: list[str] = self.parse_address_expression(components, expression)
+
+        return self.get_address_value(parsed_address_expression, expression)
+                
+
+
+    def parse_address_expression(self, components: list[str], expression: str) -> list[str]:
+
+        """
+        Returns a parsed list equivelent to the one given but with all labels and constants substituted by their address (labels) or values (constants)
+
+        :param components: Operand declaration in an instruction to be parsed to integer values
+        :type components: list[str]
+        :param expression: Expression for the memory operand to calculate the address
+        :type expression: str
+        :return: Parsed list with integer representation of labels addresses and constants values
+        :rtype: list[str]
+        :raises ValueError: If an invalid label is found in the expression or if the memory addressing mode is invalid
+        """
+
+        ret: list[str] = []
+
+        for element in components:
+            if re.match(self.CONSTANTS_AND_LABELS_PATTERN, element):
+                if Segment_Mapper.exists_in_section(element, self.data_section) or Segment_Mapper.exists_in_section(element, self.rodata_section) or Segment_Mapper.exists_in_section(element, self.bss_section):
+                    try:
+                        label_address: str = str(self.get_label_address(element))
+                        ret.append(label_address)
+                    except ValueError as e:
+                        raise ValueError(e)
+                elif Segment_Mapper.exists_in_section(element, self.constants):
+                    constant_value: str = str(self.constants[element])
+                    ret.append(constant_value)
+                else:
+                    raise ValueError(f"INVALID LABEL {element} IN MEMORY ADDRESSING MODE {expression} AT LINE {self.rip}!")
+            else:
+                ret.append(element)
+        return ret
+    
+
+    def get_label_address(self, label: str) -> int:
+        """
+        Returns the address of a given label (variable)
+        
+        :param label: Label given to a value on its declaration
+        :type label: str
+        :return: Address of this label in memory
+        :rtype: int
+        """
+        # Return types are ignored because the return type of each section is specific and mask for int values
+
+        if Segment_Mapper.exists_in_section(label, self.rodata_section):
+            return self.rodata_section[label]['addresses'][0]   #type: ignore 
+        elif Segment_Mapper.exists_in_section(label, self.data_section):
+            return self.data_section[label]['addresses'][0]     #type: ignore
+        else:
+            return self.bss_section[label]['addresses'][0]      #type: ignore
+
+
+    def get_address_value(self, components: list[str], expression: str) -> int:
+        """
+        Docstring for get_address_value
+        
+        :param components: Elements of an operand declaration in an instruction
+        :type components: list[str]
+        :return: Description
+        :rtype: int
+        :raises ValueError:  ...
+        """
+        ret: int = 0
+        list: list[str] = components
+        try:
+            ret_list: list[int] = self.verify_multiplication(components, expression)
+            ret = ret_list[0]
+            if ret_list[1] != -1:
+                list = Control_Unit.get_new_list(list, ret_list[-1], 3)
+        except ValueError as e:
+            print(f"{e}")
+            sys.exit(...)   # To be determined
+        try:
+            ret += Control_Unit.calculate_list(list)
+        except ValueError:
+            print(f"INVALID EXPRESSION {expression} IN MEMORY ADDRESSING MODE AT LINE {self.rip}!")
+            sys.exit(...)   # To be determined
+        return ret
+        
+
+        
+
+    def verify_multiplication(self, components: list[str], expression: str) -> list[int]:
+        """
+        Verifies if an operand instruction as a multiplication in its declaration.
+        If so calculates it and verifies its correctness.\n
+        Returns a list with 2 elements: 1º - Result of the calculation; 2º - Index of the first element used in the calculation (if -1 no calculation was made) 
+        
+        :param components: Elements of an operand declaration in an instruction
+        :type components: list[str]
+        :param expression: Expression of a memory addressing operand 
+        :type expression: str
+        :return: Parial calculation of the address and the index of the first element used in the calculation (will use always 3 followed indexes). Only multiplications calculated.
+        :rtype: list[int]
+        :raises ValueError: If a multiplication is detected but can't be calculated due to bad syntax
+        """
+        if Control_Unit.has_symbol(components, '*'):
+            try:
+                mult_index: int = Control_Unit.get_index_of(components, '*', 1)[0]
+            except ValueError:
+                print(f"INVALID EXPRESSION {expression} IN MEMORY ADDRESSING MODE AT LINE {self.rip}!")
+                sys.exit(...)   # To be determined
+            if mult_index != 0 and mult_index != len(components)-1:
+                try:
+                    return [int(components[mult_index-1]) * int(components[mult_index+1]), mult_index-1]
+                except ValueError as e:
+                    print(f"{e}")
+                    sys.exit(...)   # To be determined
+            else:
+                raise ValueError(f"INVALID EXPRESSION {expression} IN MEMORY ADDRESSING MODE AT LINE {self.rip}!")
+        else:
+            return [0,-1]
+    
+
+
+
+
+
+
+
+    # -----------------------
+    # STATIC HELPERS (might be moved onto a different file)
+    # -----------------------
+
+
+    @staticmethod
+    def has_symbol(list: list[str], symbol: str) -> bool:
+        """
+        Verifies if a multiplication exists in a operand expression
+        
+        :param list: List of string elements
+        :type list: list[str]
+        :param symbol: character/element to search for
+        :type symbol: str
+        :return: True if a match was found, False if it wasn't
+        :rtype: bool
+        """
+        for element in list:
+            if element == symbol:
+                return True
+        return False
+    
+    @staticmethod
+    def get_index_of(list: list[str], symbol: str, count: int) -> list[int]:
+        """
+        Returns the indexes of the occurrences of symbol in a given list of strings.\n
+        If the return length does not match the count of indexes desired raises ValueError, else returns the list
+        
+        :param list: List of string elements 
+        :type list: list[str]
+        :param symbol: character/element to search for
+        :type symbol: str
+        :param count: Number of desired occurrences of the symbol on the list.
+        :type count: int
+        :return: List of the indexes of those occurrences
+        :rtype: list[int]
+        :raises ValueError: If the occurrence count and the length of the list do not match
+        """
+        ret: list[int] = []
+
+        for i in range(len(list)):
+            if list[i] == symbol:
+                ret.append(i)
+        
+        if len(ret) != count:
+            raise ValueError
+        else:
+            return ret
+
+    @staticmethod
+    def get_new_list(list: list[str], index: int, count: int) -> list[str]:
+        """
+        Returns a new list based on a given one without a given number of followed elements of that base list given by the first index of the sequence.
+        
+        :param list: List of string elements 
+        :type list: list[str]
+        :param index: Index of the first element to remove
+        :type index: int
+        :param count: Number of times to remove the element at index
+        :type count: int
+        :return: A new list without count elements starting at position index
+        :rtype: list[str]
+        """
+        new_list: list[str] = list.copy()
+        for _ in range(count):
+            new_list.pop(index)
+        return new_list
+    
+    @staticmethod
+    def calculate_list(list: list[str]) -> int:
+        """
+        Calculates the value of a mathematic expression in list elements.\n
+        Expects the elements to start on a digit and alternate between a addition or subtration operator and a number.
+        Raises ValueError if ths syntax is not followed
+        
+        :param list: List of string elements to calculate the value of 
+        :type list: list[str]
+        :return: Result of the mathematial expression on this list
+        :rtype: int
+        :raises ValueError: If no operation symbol is found on a given odd index of the list or if an even index of the list do not point to a digit
+        """
+        try:
+            result: int = int(list[0])
+
+            for i in range(1, len(list), 2):
+                operator: str = list[i]
+                value: int = int(list[i+1])
+
+                if operator == "+":
+                    result += value
+                elif operator == "-":
+                    result -= value
+                else:
+                    raise ValueError
+                
+            return result
+        except ValueError, IndexError:
+            raise ValueError
