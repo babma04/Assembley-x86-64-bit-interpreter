@@ -37,12 +37,12 @@ class Control_Unit:
         self.alu: ALU = ALU(self)
         self.fpu: FPU = FPU(self)
 
-        self.registers: dict[str, bytearray] = {
+        self.registers: dict[str, int] = {
             # General Purpose Registers (64-bit Integers)
-            "rax": bytearray(8), "rbx": bytearray(8), "rcx": bytearray(8), "rdx": bytearray(8),
-            "rsi": bytearray(8), "rdi": bytearray(8), "rbp": bytearray(8), "rsp": loader.stack_pointer,
-            "r8": bytearray(8),  "r9": bytearray(8),  "r10": bytearray(8), "r11": bytearray(8),
-            "r12": bytearray(8), "r13": bytearray(8), "r14": bytearray(8), "r15": bytearray(8),
+            "rax": 0, "rbx": 0, "rcx": 0, "rdx": 0,
+            "rsi": 0, "rdi": 0, "rbp": 0, "rsp": loader.stack_pointer,
+            "r8": 0,  "r9": 0,  "r10": 0, "r11": 0,
+            "r12": 0, "r13": 0, "r14": 0, "r15": 0
         }
 
         # xmm registers are treated as the lower 16 bytes of each respective ymm register
@@ -465,13 +465,13 @@ class Control_Unit:
                 # should never happen
                 raise ValueError(f"INVALID ADDRESS OPERAND {operand} AT LINE {self.rip}!")
         elif operand_type == 'register':
-            value: bytes = self.registers[operand]  # type: ignore
+            value: int = self.registers[operand]  # type: ignore
             return [value, None]
         elif operand_type == 'constant':
-            value: bytes = self.constants[operand]  # type: ignore
+            value: int = self.constants[operand]  # type: ignore
             return [value, None]
         elif operand_type == 'immediate':
-            value: bytes = self.parse_immediate_value(operand)    # Only supports direct decimal or string values, no calculations
+            value: int = self.parse_immediate_value(operand)    # Only supports direct decimal or string values, no calculations
             return [value, None]
         else:
             # should never happen
@@ -592,6 +592,57 @@ class Control_Unit:
             print(f"INVALID EXPRESSION {expression} IN MEMORY ADDRESSING MODE AT LINE {self.rip}!")
             sys.exit(...)   # To be determined
         return ret
+    
+    def get_register_value(self, expression: str) -> int:
+        if expression in self.registers.keys():
+            return self.registers[expression]
+        else:
+            new_register: str = ""
+            mask_str: str = ""
+            new_register, mask_str = self.get_register_parent(expression).split()
+            return self.registers[new_register] & int(mask_str, 0)
+
+    def get_register_parent(self, expression: str) -> list[str]:
+        """
+        Maps the sub-registers to its 64-bit parent and returns it with the mask require to obtain its value
+        
+        :param expression: sub 64-bit register (has a falback option if a 64-bit register is passed)
+        :type expression: str
+        :return: List containing the parent register and the mask to the given register
+        :rtype: list[str]
+        """
+        reg = expression.lower()
+        ret_list: list[str] = []
+        # 1. 32-bit registers (e.g., eax, r8d) -> Mask: 0xFFFFFFFF
+        if reg.startswith('e') or reg.endswith('d'):
+            # eax -> rax, ebx -> rbx, ...
+            ret_list.append(reg.replace('e', 'r', 1) if reg.startswith('e') else reg[:-1])
+            ret_list.append(str(Control_Unit.MASKS_DIRECTIVES['dword']))
+
+        # 2. 16-bit registers (e.g., ax, r8w) -> Mask: 0xFFFF
+        elif len(reg) == 2 and reg.endswith('x') or reg.endswith('w'):
+             # ax -> rax, r8w -> r8, ...
+             ret_list.append('r' + reg if reg.endswith('x') else reg[:-1])
+             ret_list.append(str(Control_Unit.MASKS_DIRECTIVES['word']))
+
+        # 3. 8-bit registers (Low bytes: al, r8b / High bytes: ah)
+        elif reg.endswith('l') or reg.endswith('b'):
+            ret_list.append('r' + reg[:-1] + 'x' if len(reg) == 2 else reg[:-1])
+            ret_list.append(str(Control_Unit.MASKS_DIRECTIVES['byte']))
+        
+        elif reg.endswith('h'):
+            # Special case: ah, bh, ch, dh access bits 8-15
+            ret_list.append('r' + reg[0] + 'x')
+            ret_list.append(str(0xFF00))
+
+        # Fallback if it's already a 64-bit register
+        else:
+            ret_list.append(reg)
+            ret_list.append(str(self.registers[reg]))
+        
+        return ret_list
+
+
     
     #-------------------------
     # Operand type validation
@@ -797,7 +848,7 @@ class Control_Unit:
 
         for element in components:
             if re.match(self.GENERAL_PURPOSE_REGISTERS_PATTERN, element):
-                register_value: str = str(self.registers[element])
+                register_value: str = str(self.get_register_value(element))
                 ret.append(register_value)
             elif re.match(self.FPU_REGISTERS_PATTERN, element):
                 ### NOT CURRENTLY ACTIVE
