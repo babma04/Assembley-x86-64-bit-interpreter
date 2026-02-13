@@ -37,12 +37,12 @@ class Control_Unit:
         self.alu: ALU = ALU(self)
         self.fpu: FPU = FPU(self)
 
-        self.registers: dict[str, int] = {
+        self.registers: dict[str, bytearray] = {
             # General Purpose Registers (64-bit Integers)
-            "rax": 0, "rbx": 0, "rcx": 0, "rdx": 0,
-            "rsi": 0, "rdi": 0, "rbp": 0, "rsp": loader.stack_pointer,
-            "r8": 0,  "r9": 0,  "r10": 0, "r11": 0,
-            "r12": 0, "r13": 0, "r14": 0, "r15": 0,
+            "rax": bytearray(8), "rbx": bytearray(8), "rcx": bytearray(8), "rdx": bytearray(8),
+            "rsi": bytearray(8), "rdi": bytearray(8), "rbp": bytearray(8), "rsp": loader.stack_pointer,
+            "r8": bytearray(8),  "r9": bytearray(8),  "r10": bytearray(8), "r11": bytearray(8),
+            "r12": bytearray(8), "r13": bytearray(8), "r14": bytearray(8), "r15": bytearray(8),
         }
 
         # xmm registers are treated as the lower 16 bytes of each respective ymm register
@@ -84,6 +84,11 @@ class Control_Unit:
         self.op2_address: int | None = None # address must be None if self.op2 is not a memory operand
         self.op2_type: str | None = None # type must be None if self.op2 = None, otherwise it must be either 'direct memory'/'base memory'/'indexed memory'/'address'/'register'/'constant'/'immediate'
         self.valid_instructions: dict[str, dict[str, int]] = Storage.read_valid_instructions(validation_file_name)
+
+
+    #---------------------------------
+    # Cicle execution methods
+    #---------------------------------
 
     def run(self) -> None:
         self.rip += 1
@@ -139,6 +144,12 @@ class Control_Unit:
                 raise ValueError(f"INVALID OPERAND COUNT FOR INSTRUCTION {self.curretent_instruction} AT LINE {self.rip}!")
         else:
             raise ValueError(f"INVALID INSTRUCTION AT LINE {self.rip}!")
+    
+
+
+    #-----------------------------------
+    # General validation methods
+    #-----------------------------------
     
     
     def is_valid_instruction(self, instruction: str) -> bool:
@@ -255,37 +266,25 @@ class Control_Unit:
         else:
             self.set_operand("both", None, 0)
             raise ValueError(f"INVALID SYNTAX FOR INSTRUCTION {self.curretent_instruction} AT LINE {self.rip}!")
-
-
-    def get_operand(self, operand: str) -> list[str]:
-        """
-        Retrieves the operand expression and size if valid.\n
-        Goes through all the possible operand types and verifies if the given operand matches any of them. Else will raise an error.
-        Acts as a dispatcher to the specific operand type verifiers.
-        
-        :param operand: Expression for the operand to retrieve 
-        :type operand: str
-        :return: List containing the operand expression and its size if valid, otherwise an empty list
-        :rtype: list[str]
-        :raises ValueError: If the operand is invalid or if an invalid label is found during size retrieval
-        """
-        ret: list[str] = []
-
-        try: 
-            condition: bool = self.is_memory_addressing(operand) or self.is_address(operand) or self.is_register(operand) or self.is_constant(operand) or self.is_immediate_value(operand)
-        except ValueError as e:
-            raise ValueError(e)
-        if condition:
-            ret.append(operand)
-            try:
-                size: int = self.get_label_size(operand)
-            except ValueError as e:
-                raise ValueError(e)
-            ret.append(str(size))
-        return ret
-
-        
     
+    def valid_operand_count(self) -> bool:
+        """
+        Verifies if the current operand count is valid for the current instruction
+
+        :return: True if the current operand count is valid for the current instruction
+        :rtype: bool
+        """
+        expected_operand_count: int = self.valid_instructions[self.current_fu][self.curretent_instruction]  # type: ignore
+        actual_operand_count: int = 0
+        if self.op1 != None:
+            actual_operand_count += 1
+        if self.op2 != None:
+            actual_operand_count += 1
+        return expected_operand_count == actual_operand_count        
+
+    #---------------------------
+    # Operand setting methods
+    #---------------------------
 
     def set_operand(self, operand: str, expression: str | None, size: int) -> None:
         """
@@ -332,6 +331,73 @@ class Control_Unit:
             except ValueError as e:
                 raise ValueError(e)
     
+    def set_operand_value_and_address(self, line: list[str]) -> None:
+        """
+        Attribute a value and address to the operand value and address attributes based on the operand expression and type
+        
+        :param line: List of strings representing the instruction line
+        :type line: list[str]
+        :raises ValueError: If an invalid label is found during operand value or address determination
+        """
+        if self.op1 != None:
+            try:
+                op1_info: list[int | None]= self.determine_operand_value_and_address(self.op1, self.op1_type, self.memory)
+                self.set_operand_value("op1", op1_info[0])  # type: ignore
+                self.set_operand_address("op1", op1_info[1])
+            except ValueError as e:
+                raise ValueError(e)
+        if self.op2 != None:
+            try:
+                op2_info: list[int | None]= self.determine_operand_value_and_address(self.op2, self.op2_type, self.memory)
+                self.set_operand_value("op2", op2_info[0]) # type: ignore
+                self.set_operand_address("op2", op2_info[1])
+            except ValueError as e:
+                raise ValueError(e)
+    
+    def set_operand_value(self, operand:str, value: int) -> None:
+        """
+        Attribute a value to the operand value attributes
+
+        :param operand: Expression for the operand to update (both/op1/op2)
+        :type operand: str
+        :param value: Value of the operand (must be calculated)
+        :type value: int
+        :raises ValueError: If an invalid operand identifier is used
+        """
+        if operand == "both":
+            self.op1_value = value
+            self.op2_value = value
+        elif operand == "op1":
+            self.op1_value = value
+        elif operand == "op2":
+            self.op2_value = value
+        else:
+            raise ValueError(f"INVALID OPERAND IDENTIFIER {operand} USED. IT SHOULD BE EITHER 'both'/'op1'/'op2'!")
+        
+    def set_operand_address(self, operand:str, address: int | None) -> None:
+        """
+        Attribute an address to the operand address attributes
+
+        :param operand: Expression for the operand to update (both/op1/op2)
+        :type operand: str
+        :param address: Address of the operand (must be calculated, None if not a memory operand)
+        :type address: int | None
+        :raises ValueError: If an invalid operand identifier is used
+        """
+        if operand == "both":
+            self.op1_address = address
+            self.op2_address = address
+        elif operand == "op1":
+            self.op1_address = address
+        elif operand == "op2":
+            self.op2_address = address
+        else:
+            raise ValueError(f"INVALID OPERAND IDENTIFIER {operand} USED. IT SHOULD BE EITHER 'both'/'op1'/'op2'!")
+
+    #------------------------
+    # Operand Determination
+    #------------------------
+
     def determine_operand_type(self, operand: str) -> str:
         """
         Determines the operand type based on its expression by going through the possible operand types and verifying if the expression matches any of them.        
@@ -360,30 +426,9 @@ class Control_Unit:
             # should never happen
             raise ValueError(f"UNABLE TO DETERMINE OPERAND TYPE FOR {operand} AT LINE {self.rip}!")
     
-    def set_operand_value_and_address(self, line: list[str]) -> None:
-        """
-        Attribute a value and address to the operand value and address attributes based on the operand expression and type
-        
-        :param line: List of strings representing the instruction line
-        :type line: list[str]
-        :raises ValueError: If an invalid label is found during operand value or address determination
-        """
-        if self.op1 != None:
-            try:
-                op1_info: list[int | None]= self.determine_operand_value_and_address(self.op1, self.op1_type, self.memory)
-                self.set_operand_value("op1", op1_info[0])  # type: ignore
-                self.set_operand_address("op1", op1_info[1])
-            except ValueError as e:
-                raise ValueError(e)
-        if self.op2 != None:
-            try:
-                op2_info: list[int | None]= self.determine_operand_value_and_address(self.op2, self.op2_type, self.memory)
-                self.set_operand_value("op2", op2_info[0]) # type: ignore
-                self.set_operand_address("op2", op2_info[1])
-            except ValueError as e:
-                raise ValueError(e)
-    
-    def determine_operand_value_and_address(self, operand: str, operand_type: str | None, memory: Data_Memory) -> list[bytes | int | None]:
+    ### RETURNOF BYTES MUST BE DELT WITH
+
+    def determine_operand_value_and_address(self, operand: str, operand_type: str | None, memory: Data_Memory) -> list[int| None]:
         """
         Determines the operand value and address based on its expression and type by going through the possible operand types and calculating the value and address accordingly.        
 
@@ -433,46 +478,125 @@ class Control_Unit:
             raise ValueError(f"INVALID OPERAND TYPE {operand_type} AT LINE {self.rip}!")
 
 
-    def set_operand_value(self, operand:str, value: int) -> None:
-        """
-        Attribute a value to the operand value attributes
+    #----------------------
+    # Operand capture
+    #----------------------
 
-        :param operand: Expression for the operand to update (both/op1/op2)
-        :type operand: str
-        :param value: Value of the operand (must be calculated)
-        :type value: int
-        :raises ValueError: If an invalid operand identifier is used
+    def get_operand(self, operand: str) -> list[str]:
         """
-        if operand == "both":
-            self.op1_value = value
-            self.op2_value = value
-        elif operand == "op1":
-            self.op1_value = value
-        elif operand == "op2":
-            self.op2_value = value
-        else:
-            raise ValueError(f"INVALID OPERAND IDENTIFIER {operand} USED. IT SHOULD BE EITHER 'both'/'op1'/'op2'!")
+        Retrieves the operand expression and size if valid.\n
+        Goes through all the possible operand types and verifies if the given operand matches any of them. Else will raise an error.
+        Acts as a dispatcher to the specific operand type verifiers.
         
-    def set_operand_address(self, operand:str, address: int | None) -> None:
-        """
-        Attribute an address to the operand address attributes
-
-        :param operand: Expression for the operand to update (both/op1/op2)
+        :param operand: Expression for the operand to retrieve 
         :type operand: str
-        :param address: Address of the operand (must be calculated, None if not a memory operand)
-        :type address: int | None
-        :raises ValueError: If an invalid operand identifier is used
+        :return: List containing the operand expression and its size if valid, otherwise an empty list
+        :rtype: list[str]
+        :raises ValueError: If the operand is invalid or if an invalid label is found during size retrieval
         """
-        if operand == "both":
-            self.op1_address = address
-            self.op2_address = address
-        elif operand == "op1":
-            self.op1_address = address
-        elif operand == "op2":
-            self.op2_address = address
-        else:
-            raise ValueError(f"INVALID OPERAND IDENTIFIER {operand} USED. IT SHOULD BE EITHER 'both'/'op1'/'op2'!")
+        ret: list[str] = []
+
+        try: 
+            condition: bool = self.is_memory_addressing(operand) or self.is_address(operand) or self.is_register(operand) or self.is_constant(operand) or self.is_immediate_value(operand)
+        except ValueError as e:
+            raise ValueError(e)
+        if condition:
+            ret.append(operand)
+            try:
+                size: int = self.get_label_size(operand)
+            except ValueError as e:
+                raise ValueError(e)
+            ret.append(str(size))
+        return ret
     
+    def get_labels(self, expressions: str) -> list[str]:
+        """
+        Extracts all labels from a given expression list by order.
+
+        :param expression: Expression in verification
+        :type expression: str
+        :return: List of labels found in the expression in order of appearance 
+        or ['Invalid'] if an invalid label-like element is found
+        :rtype: list[str]
+        """
+        labels: list[str] = []
+        found_labels: list[str] = re.findall(self.CONSTANTS_AND_LABELS_PATTERN, expressions)
+        for item in found_labels:
+            if not (Segment_Mapper.exists_in_section(item, self.data_section) or Segment_Mapper.exists_in_section(item, self.rodata_section) or Segment_Mapper.exists_in_section(item, self.bss_section)):
+                    return ['Invalid']
+            elif Segment_Mapper.exists_in_section(item, self.data_section) or Segment_Mapper.exists_in_section(item, self.rodata_section) or Segment_Mapper.exists_in_section(item, self.bss_section):
+                labels.append(item)
+        return labels
+
+    def get_label_size(self, label: str) -> int:
+        """
+        Gets the size of a given label from the data/bss/rodata sections
+
+        :param label: Label in verification
+        :type label: str
+        :return: Size of the label in bytes
+        :rtype: int
+        :raises ValueError: If the label is not found in any section
+        """
+        if Segment_Mapper.exists_in_section(label, self.data_section):
+            return self.data_section[label]['size'] # type: ignore  
+        elif Segment_Mapper.exists_in_section(label, self.rodata_section):
+            return self.rodata_section[label]['size']   # type: ignore
+        elif Segment_Mapper.exists_in_section(label, self.bss_section):
+            return self.bss_section[label]['size']  # type: ignore
+        else:
+            raise ValueError(f"LABEL {label} NOT FOUND IN ANY SECTION DURING SIZE RETRIEVAL AT LINE {self.rip}!")       # should not happen
+        
+    def get_label_address(self, label: str) -> int:
+        """
+        Returns the address of a given label (variable)
+        
+        :param label: Label given to a value on its declaration
+        :type label: str
+        :return: Address of this label in memory
+        :rtype: int
+        """
+        # Return types are ignored because the return type of each section is specific and mask for int values
+
+        if Segment_Mapper.exists_in_section(label, self.rodata_section):
+            return self.rodata_section[label]['addresses'][0]   #type: ignore 
+        elif Segment_Mapper.exists_in_section(label, self.data_section):
+            return self.data_section[label]['addresses'][0]     #type: ignore
+        else:
+            return self.bss_section[label]['addresses'][0]      #type: ignore
+
+
+    def get_address_value(self, components: list[str], expression: str) -> int:
+        """
+        Docstring for get_address_value
+        
+        :param components: Elements of an operand declaration in an instruction
+        :type components: list[str]
+        :return: Description
+        :rtype: int
+        :raises ValueError:  ...
+        """
+        ret: int = 0
+        list: list[str] = components
+        try:
+            ret_list: list[int] = self.verify_multiplication(components, expression)
+            ret = ret_list[0]
+            if ret_list[1] != -1:
+                list = Control_Unit.get_new_list(list, ret_list[-1], 3)
+        except ValueError as e:
+            print(f"{e}")
+            sys.exit(...)   # To be determined
+        try:
+            ret += Control_Unit.calculate_list(list)
+        except ValueError:
+            print(f"INVALID EXPRESSION {expression} IN MEMORY ADDRESSING MODE AT LINE {self.rip}!")
+            sys.exit(...)   # To be determined
+        return ret
+    
+    #-------------------------
+    # Operand type validation
+    #-------------------------
+
     def is_memory_addressing(self, expression: str) -> bool:
         """
         Verifies if a given expression is a memory addressing mode
@@ -507,26 +631,6 @@ class Control_Unit:
                 return False
             return True
         return False
-    
-    
-    def get_labels(self, expressions: str) -> list[str]:
-        """
-        Extracts all labels from a given expression list by order.
-
-        :param expression: Expression in verification
-        :type expression: str
-        :return: List of labels found in the expression in order of appearance 
-        or ['Invalid'] if an invalid label-like element is found
-        :rtype: list[str]
-        """
-        labels: list[str] = []
-        found_labels: list[str] = re.findall(self.CONSTANTS_AND_LABELS_PATTERN, expressions)
-        for item in found_labels:
-            if not (Segment_Mapper.exists_in_section(item, self.data_section) or Segment_Mapper.exists_in_section(item, self.rodata_section) or Segment_Mapper.exists_in_section(item, self.bss_section)):
-                    return ['Invalid']
-            elif Segment_Mapper.exists_in_section(item, self.data_section) or Segment_Mapper.exists_in_section(item, self.rodata_section) or Segment_Mapper.exists_in_section(item, self.bss_section):
-                labels.append(item)
-        return labels
     
     def is_base_addessing(self, expression: str) -> bool:
         """
@@ -632,39 +736,9 @@ class Control_Unit:
             return True
         return False
     
-    def get_label_size(self, label: str) -> int:
-        """
-        Gets the size of a given label from the data/bss/rodata sections
-
-        :param label: Label in verification
-        :type label: str
-        :return: Size of the label in bytes
-        :rtype: int
-        :raises ValueError: If the label is not found in any section
-        """
-        if Segment_Mapper.exists_in_section(label, self.data_section):
-            return self.data_section[label]['size'] # type: ignore  
-        elif Segment_Mapper.exists_in_section(label, self.rodata_section):
-            return self.rodata_section[label]['size']   # type: ignore
-        elif Segment_Mapper.exists_in_section(label, self.bss_section):
-            return self.bss_section[label]['size']  # type: ignore
-        else:
-            raise ValueError(f"LABEL {label} NOT FOUND IN ANY SECTION DURING SIZE RETRIEVAL AT LINE {self.rip}!")       # should not happen
-    
-    def valid_operand_count(self) -> bool:
-        """
-        Verifies if the current operand count is valid for the current instruction
-
-        :return: True if the current operand count is valid for the current instruction
-        :rtype: bool
-        """
-        expected_operand_count: int = self.valid_instructions[self.current_fu][self.curretent_instruction]  # type: ignore
-        actual_operand_count: int = 0
-        if self.op1 != None:
-            actual_operand_count += 1
-        if self.op2 != None:
-            actual_operand_count += 1
-        return expected_operand_count == actual_operand_count    
+    #----------------------------------------------
+    # Operand and expressions calculation methods
+    #----------------------------------------------
     
     def calculate_memory_address(self, expression: str) -> int:
         """
@@ -677,9 +751,9 @@ class Control_Unit:
         :raises ValueError: If an invalid label is found in the expression or if the memory addressing mode is invalid
         """
         if self.is_direct_memory_addressing(expression):
-            return self.calculate_direct_memory_address(expression)
+            return self.calculate_direct_or_base_memory_address(expression)
         elif self.is_base_addessing(expression):
-            return self.calculate_base_memory_address(expression)
+            return self.calculate_direct_or_base_memory_address(expression)
         elif self.is_indexed_addressing(expression):
             return self.calculate_indexed_memory_address(expression)
         else:
@@ -687,15 +761,22 @@ class Control_Unit:
             raise ValueError(f"INVALID MEMORY ADDRESSING MODE {expression} AT LINE {self.rip}!")
     
 
-    def calculate_direct_memory_address(self, expression: str) -> int:
-
+        ### REVIEW THE ENTIRE FLOW OF CALCULATION FOR EXCEPTIONS RAISED
+    def calculate_direct_or_base_memory_address(self, expression: str) -> int:
+        """
+        Calculates the address value of a direct memroy addressing operand expression
+        
+        :param expression: Full operand expression to calculate
+        :type expression: str
+        :return: Address value of the expression
+        :rtype: int
+        """
         new_expression: str = expression.replace(" ", "").replace("[", "").replace("]", "")
         components: list[str] = re.split(r'([\+\-])', new_expression)
 
         parsed_address_expression: list[str] = self.parse_address_expression(components, expression)
 
         return self.get_address_value(parsed_address_expression, expression)
-                
 
 
     def parse_address_expression(self, components: list[str], expression: str) -> list[str]:
@@ -715,7 +796,13 @@ class Control_Unit:
         ret: list[str] = []
 
         for element in components:
-            if re.match(self.CONSTANTS_AND_LABELS_PATTERN, element):
+            if re.match(self.GENERAL_PURPOSE_REGISTERS_PATTERN, element):
+                register_value: str = str(self.registers[element])
+                ret.append(register_value)
+            elif re.match(self.FPU_REGISTERS_PATTERN, element):
+                ### NOT CURRENTLY ACTIVE
+                pass
+            elif re.match(self.CONSTANTS_AND_LABELS_PATTERN, element):
                 if Segment_Mapper.exists_in_section(element, self.data_section) or Segment_Mapper.exists_in_section(element, self.rodata_section) or Segment_Mapper.exists_in_section(element, self.bss_section):
                     try:
                         label_address: str = str(self.get_label_address(element))
@@ -729,53 +816,6 @@ class Control_Unit:
                     raise ValueError(f"INVALID LABEL {element} IN MEMORY ADDRESSING MODE {expression} AT LINE {self.rip}!")
             else:
                 ret.append(element)
-        return ret
-    
-
-    def get_label_address(self, label: str) -> int:
-        """
-        Returns the address of a given label (variable)
-        
-        :param label: Label given to a value on its declaration
-        :type label: str
-        :return: Address of this label in memory
-        :rtype: int
-        """
-        # Return types are ignored because the return type of each section is specific and mask for int values
-
-        if Segment_Mapper.exists_in_section(label, self.rodata_section):
-            return self.rodata_section[label]['addresses'][0]   #type: ignore 
-        elif Segment_Mapper.exists_in_section(label, self.data_section):
-            return self.data_section[label]['addresses'][0]     #type: ignore
-        else:
-            return self.bss_section[label]['addresses'][0]      #type: ignore
-
-
-    def get_address_value(self, components: list[str], expression: str) -> int:
-        """
-        Docstring for get_address_value
-        
-        :param components: Elements of an operand declaration in an instruction
-        :type components: list[str]
-        :return: Description
-        :rtype: int
-        :raises ValueError:  ...
-        """
-        ret: int = 0
-        list: list[str] = components
-        try:
-            ret_list: list[int] = self.verify_multiplication(components, expression)
-            ret = ret_list[0]
-            if ret_list[1] != -1:
-                list = Control_Unit.get_new_list(list, ret_list[-1], 3)
-        except ValueError as e:
-            print(f"{e}")
-            sys.exit(...)   # To be determined
-        try:
-            ret += Control_Unit.calculate_list(list)
-        except ValueError:
-            print(f"INVALID EXPRESSION {expression} IN MEMORY ADDRESSING MODE AT LINE {self.rip}!")
-            sys.exit(...)   # To be determined
         return ret
         
 
@@ -812,11 +852,6 @@ class Control_Unit:
         else:
             return [0,-1]
     
-
-
-
-
-
 
 
     # -----------------------
