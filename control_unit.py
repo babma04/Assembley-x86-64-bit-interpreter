@@ -594,53 +594,63 @@ class Control_Unit:
         return ret
     
     def get_register_value(self, expression: str) -> int:
+        """
+        Returns a register value based on the expression given and it's parent value defined as a class instance
+
+        :param expression: Register to obtain the value of
+        :type expression: str
+        :return: Integer value of that register
+        :rtype: int
+        :raises KeyError: If the obtained parent register is not defined in this classes instances
+        """
         if expression in self.registers.keys():
             return self.registers[expression]
-        else:
-            new_register: str = ""
-            mask_str: str = ""
-            new_register, mask_str = self.get_register_parent(expression).split()
-            return self.registers[new_register] & int(mask_str, 0)
+        parent, mask = self.get_register_parent(expression)
+        
+        if parent not in self.registers:
+            raise KeyError(f"Unknown register: {expression}")
 
-    def get_register_parent(self, expression: str) -> list[str]:
+        raw_val: int = self.registers[parent] & mask
+        
+        # Shift high-bytes down to the 0-255 range
+        if expression.lower().endswith('h') and len(expression) == 2:
+            return raw_val >> 8
+            
+        return raw_val
+
+    def get_register_parent(self, expression: str) -> tuple[str, int]:
         """
         Maps the sub-registers to its 64-bit parent and returns it with the mask require to obtain its value
         
         :param expression: sub 64-bit register (has a falback option if a 64-bit register is passed)
         :type expression: str
-        :return: List containing the parent register and the mask to the given register
-        :rtype: list[str]
+        :return: Tuple containing the parent register and the mask to the given register
+        :rtype: tuple[str, int]
         """
         reg = expression.lower()
-        ret_list: list[str] = []
-        # 1. 32-bit registers (e.g., eax, r8d) -> Mask: 0xFFFFFFFF
+        
+        # 32-bit: eax -> rax, r8d -> r8
         if reg.startswith('e') or reg.endswith('d'):
-            # eax -> rax, ebx -> rbx, ...
-            ret_list.append(reg.replace('e', 'r', 1) if reg.startswith('e') else reg[:-1])
-            ret_list.append(str(Control_Unit.MASKS_DIRECTIVES['dword']))
+            parent = reg.replace('e', 'r', 1) if reg.startswith('e') else reg[:-1]
+            return parent, self.MASKS_DIRECTIVES['dword']
 
-        # 2. 16-bit registers (e.g., ax, r8w) -> Mask: 0xFFFF
-        elif len(reg) == 2 and reg.endswith('x') or reg.endswith('w'):
-             # ax -> rax, r8w -> r8, ...
-             ret_list.append('r' + reg if reg.endswith('x') else reg[:-1])
-             ret_list.append(str(Control_Unit.MASKS_DIRECTIVES['word']))
+        # 16-bit: ax -> rax, r8w -> r8
+        if (len(reg) == 2 and reg.endswith('x')) or reg.endswith('w'):
+             parent = 'r' + reg if reg.endswith('x') else reg[:-1]
+             return parent, self.MASKS_DIRECTIVES['word']
 
-        # 3. 8-bit registers (Low bytes: al, r8b / High bytes: ah)
-        elif reg.endswith('l') or reg.endswith('b'):
-            ret_list.append('r' + reg[:-1] + 'x' if len(reg) == 2 else reg[:-1])
-            ret_list.append(str(Control_Unit.MASKS_DIRECTIVES['byte']))
+        # 8-bit Low: al -> rax, r8b -> r8
+        if reg.endswith('l') or reg.endswith('b'):
+            parent = 'r' + reg[:-1] + 'x' if len(reg) == 2 else reg[:-1]
+            return parent, self.MASKS_DIRECTIVES['byte']
         
-        elif reg.endswith('h'):
-            # Special case: ah, bh, ch, dh access bits 8-15
-            ret_list.append('r' + reg[0] + 'x')
-            ret_list.append(str(0xFF00))
+        # 8-bit High: ah -> rax
+        if reg.endswith('h') and len(reg) == 2:
+            parent = 'r' + reg[0] + 'x'
+            return parent, 0xFF00
 
-        # Fallback if it's already a 64-bit register
-        else:
-            ret_list.append(reg)
-            ret_list.append(str(self.registers[reg]))
-        
-        return ret_list
+        # Fallback for 64-bit
+        return reg, self.MASKS_DIRECTIVES['qword']
 
 
     
