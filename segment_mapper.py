@@ -1,6 +1,7 @@
 import sys
 from storage import Storage
 from data_memory import Data_Memory
+from control_unit import Control_Unit   # For types pattern usage
 from .types import DataSectionInfo, BssSectionInfo, LabelMap, ConstantMap, Address
 import re
 
@@ -468,7 +469,7 @@ class Segment_Mapper:
         
         elif Segment_Mapper.has_size_calculation(line) and not self.valid_size_calculation(line, index):
             return False
-        elif not re.match(r'^\d$', line[2]) and not Segment_Mapper.has_size_calculation(line):
+        elif not re.match(fr'^{Control_Unit.IMMEDIATE_VALUE_PATTERN}$', line[2]) and not Segment_Mapper.has_size_calculation(line):
             print(f"INVALID CONSTANT DECLARATION AT LINE {index}. Exiting program on a SyntaxError...")
             return False
         return True
@@ -508,16 +509,16 @@ class Segment_Mapper:
         self.constants[line[0]]['line'] = index
         if Segment_Mapper.has_size_calculation(line):
             variable: str = line[len(line)-1]
-            value: int | str = self.get_constant_value(variable, index, line[0])
+            value: int | str = self.get_size_constant_value(variable, index, line[0])
         else:
             try:
-                value: int | str = self.get_undeclared_constant_value(line[2], index)
+                value: int | str = self.get_constant_value(line[2], index)
             except ValueError as e:
                 print(e)
                 sys.exit(0)
         self.constants[line[0]]['value'] = value    # Only values not passed as bytes
 
-    def get_constant_value(self, variable: str, index: int, label: str) -> int | str:
+    def get_size_constant_value(self, variable: str, index: int, label: str) -> int | str:
         """
         Gets the number of addresses used to define the variable used to declare a constant.\n
         Should be used to get the value of size constant declarations
@@ -536,9 +537,9 @@ class Segment_Mapper:
         return int(self.rodata_segment[variable]['size'])    # type: ignore  (is always int)
     
 
-    def get_undeclared_constant_value(self, value: str, index: int) -> int | str:
+    def get_constant_value(self, value: str, index: int) -> int | str:
         """
-        Gets the value of a constant that is not declared using a variable label.
+        Gets the value of a constant that is not declared using a size calculation of a string.
         
         :param value: value of the constant to be parsed
         :type value: str

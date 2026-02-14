@@ -19,6 +19,16 @@
     $py main.py "C:\Users\João Louro\Desktop\CPU simulator\example.asm"
 
 ## Code format and syntax references
+### Allowed declarations:
+- All type of allowed declarations but a standard compiler for the .rodata, .data and .bss sections are allowed.
+- Constants declarations are a bit more nuanced:
+    - Allowed declarations include:
+        - Standard declarations:
+            - <constant_uppercased_label> equ: <integer_value>;
+            - <constant_uppercased_label> equ: <string_size_calculation>;
+        - String declarations:
+            - <constant_uppercased_label> equ: '<character_value>';
+            - <constant_uppercased_label> equ: "<string_value>";
 ### Operand syntax rules:
 
     - Operands writen with different components should have no spaces in between each component of the expression:
