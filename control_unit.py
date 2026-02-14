@@ -428,7 +428,7 @@ class Control_Unit:
     
     ### RETURNOF BYTES MUST BE DELT WITH
 
-    def determine_operand_value_and_address(self, operand: str, operand_type: str | None, memory: Data_Memory) -> list[int| None]:
+    def determine_operand_value_and_address(self, operand: str, operand_type: str | None, memory: Data_Memory) -> list[int|bytes | None]:
         """
         Determines the operand value and address based on its expression and type by going through the possible operand types and calculating the value and address accordingly.        
 
@@ -444,15 +444,15 @@ class Control_Unit:
         """
         if operand_type == 'direct memory':
             address: int = self.calculate_memory_address(operand)
-            value: bytes = memory.read_bytes(address, self.op1_size)  
-            return [value, address]
+            value: bytes | int = memory.read_bytes(address, self.op1_size)  
+            return [value, address] 
         elif operand_type == 'base memory':
             address: int = self.calculate_memory_address(operand)
-            value: bytes = memory.read_bytes(address, self.op1_size)  
-            return [value, address]
+            value: bytes | int = memory.read_bytes(address, self.op1_size)  
+            return [value, address] 
         elif operand_type == 'indexed memory':
             address: int = self.calculate_memory_address(operand)
-            value: bytes = memory.read_bytes(address, self.op1_size)  
+            value: bytes | int = memory.read_bytes(address, self.op1_size)  
             return [value, address]
         elif operand_type == 'address':
             if re.match(self.CONSTANTS_AND_LABELS_PATTERN, operand):
@@ -465,13 +465,13 @@ class Control_Unit:
                 # should never happen
                 raise ValueError(f"INVALID ADDRESS OPERAND {operand} AT LINE {self.rip}!")
         elif operand_type == 'register':
-            value: int = self.registers[operand]  # type: ignore
+            value: bytes | int = self.registers[operand]  # type: ignore
             return [value, None]
         elif operand_type == 'constant':
-            value: int = self.constants[operand]  # type: ignore
+            value: bytes | int = self.constants[operand]  # type: ignore
             return [value, None]
         elif operand_type == 'immediate':
-            value: int = self.parse_immediate_value(operand)    # Only supports direct decimal or string values, no calculations
+            value: bytes | int = self.parse_immediate_value(operand)    # Only supports direct decimal or string values, no calculations
             return [value, None]
         else:
             # should never happen
@@ -652,6 +652,26 @@ class Control_Unit:
         # Fallback for 64-bit
         return reg, self.MASKS_DIRECTIVES['qword']
 
+    def get_constant_encoded_value(self, label: str) -> int:
+        """
+        Processes the value of a constant declaration to be returned as an integer.
+        
+        :param label: Label of the constant
+        :type label: str
+        :return: Integer value of the constant's declared value
+        :rtype: int
+        """
+        constant_value: int | str = self.constants[label]['value']
+
+        if isinstance(constant_value, int):
+            return int(constant_value, 0)   #type: ignore
+        else:
+            # The value is a String
+            byte_value: bytes = str(constant_value).encode()
+            return int.from_bytes(byte_value, 'little')
+            
+
+
 
     
     #-------------------------
@@ -797,35 +817,24 @@ class Control_Unit:
             return True
         return False
     
+    def is_valid_line_for_constant(self, line: int) -> bool:
+        """
+        Verifies if a constant was declared before the current line being executed
+        
+        :param line: Line of the declaration of the constant
+        :type line: int
+        :return: True if the current line is bigger than line, False otherwise
+        :rtype: bool
+        """
+        return self.rip > line
+    
     #----------------------------------------------
     # Operand and expressions calculation methods
     #----------------------------------------------
     
     def calculate_memory_address(self, expression: str) -> int:
         """
-        Calculates the memory address from a given memory addressing expression by going through the possible memory addressing modes and calculating the address accordingly.
-        
-        :param expression: Expression for the memory operand to calculate the address
-        :type expression: str
-        :return: The calculated memory address
-        :rtype: int
-        :raises ValueError: If an invalid label is found in the expression or if the memory addressing mode is invalid
-        """
-        if self.is_direct_memory_addressing(expression):
-            return self.calculate_direct_or_base_memory_address(expression)
-        elif self.is_base_addessing(expression):
-            return self.calculate_direct_or_base_memory_address(expression)
-        elif self.is_indexed_addressing(expression):
-            return self.calculate_indexed_memory_address(expression)
-        else:
-            # should never happen
-            raise ValueError(f"INVALID MEMORY ADDRESSING MODE {expression} AT LINE {self.rip}!")
-    
-
-        ### REVIEW THE ENTIRE FLOW OF CALCULATION FOR EXCEPTIONS RAISED
-    def calculate_direct_or_base_memory_address(self, expression: str) -> int:
-        """
-        Calculates the address value of a direct memroy addressing operand expression
+        Calculates the address value of a memory addressing operand expression
         
         :param expression: Full operand expression to calculate
         :type expression: str
@@ -833,15 +842,16 @@ class Control_Unit:
         :rtype: int
         """
         new_expression: str = expression.replace(" ", "").replace("[", "").replace("]", "")
-        components: list[str] = re.split(r'([\+\-])', new_expression)
-
-        parsed_address_expression: list[str] = self.parse_address_expression(components, expression)
-
+        components: list[str] = re.split(r'([\+\-\*])', new_expression)
+        try:
+            parsed_address_expression: list[str] = self.parse_address_expression(components, expression)
+        except ValueError as e:
+            print(e)
+            sys.exit(...)
         return self.get_address_value(parsed_address_expression, expression)
 
 
     def parse_address_expression(self, components: list[str], expression: str) -> list[str]:
-
         """
         Returns a parsed list equivelent to the one given but with all labels and constants substituted by their address (labels) or values (constants)
 
@@ -871,7 +881,9 @@ class Control_Unit:
                     except ValueError as e:
                         raise ValueError(e)
                 elif Segment_Mapper.exists_in_section(element, self.constants):
-                    constant_value: str = str(self.constants[element])
+                    if not self.is_valid_line_for_constant(int(self.constants[element]['line'])):
+                        raise ValueError(f"Constant {element} is not yet defined")
+                    constant_value: str = str(self.get_constant_encoded_value(element))
                     ret.append(constant_value)
                 else:
                     raise ValueError(f"INVALID LABEL {element} IN MEMORY ADDRESSING MODE {expression} AT LINE {self.rip}!")
