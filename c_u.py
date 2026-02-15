@@ -5,6 +5,8 @@ import sys
 import re
 from alu import ALU
 
+### NOT IN USE
+
 class _:
     """
     A simple CPU simulator with registers, program counter, and memory.

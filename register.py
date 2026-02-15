@@ -1,5 +1,8 @@
 class Register64:
 
+    ### NOT IN USE
+
+
     """
     utility class used to create and simulate register behaviour for the CPU class.
     It's purpose is to enable register objects to be created, stored and used all along the cpu class.

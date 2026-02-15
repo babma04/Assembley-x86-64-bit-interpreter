@@ -33,8 +33,8 @@
 
     - Operands writen with different components should have no spaces in between each component of the expression:
         ex.:
-        - What to avoid: [rbx + 4 * 1] / CONSTANT + 4
-        - Correct version: [rbx+4*1]   / CONSTANT+4
+        - What to avoid: [rbx + 4 * 1] or CONSTANT + 4
+        - Correct version: [rbx+4*1]   or CONSTANT+4
     - If an operand is an immidiate value it should always be simplified to the maximum extent possible avoiding complex nested paranteses expresions:
         ex.: 
         - What to avoid: ((4+3+1)*4 + 6 + (7 + 8)*2)

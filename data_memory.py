@@ -64,8 +64,13 @@ class Data_Memory:
         :param data: data to write
         :type data: bytes
         """
+        if not self.valid_data_length(data):
+            data = get_valid_data(data)
         self.memory[addr:addr + size] = data
     
+    def valid_data_length(self, data: bytes) -> bool:
+
+        if 
 
     # -----------------------
     #  STACK OPERATIONS (fixed 8 bytes per entry)

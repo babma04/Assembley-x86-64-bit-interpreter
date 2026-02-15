@@ -341,16 +341,16 @@ class Control_Unit:
         """
         if self.op1 != None:
             try:
-                op1_info: list[int | None]= self.determine_operand_value_and_address(self.op1, self.op1_type, self.memory)
+                op1_info: list[int|bytes | None]= self.determine_operand_value_and_address(self.op1, self.op1_type, self.memory)
                 self.set_operand_value("op1", op1_info[0])  # type: ignore
                 self.set_operand_address("op1", op1_info[1])
             except ValueError as e:
                 raise ValueError(e)
         if self.op2 != None:
             try:
-                op2_info: list[int | None]= self.determine_operand_value_and_address(self.op2, self.op2_type, self.memory)
-                self.set_operand_value("op2", op2_info[0]) # type: ignore
-                self.set_operand_address("op2", op2_info[1])
+                op2_info: list[int|bytes | None]= self.determine_operand_value_and_address(self.op2, self.op2_type, self.memory)
+                self.set_operand_value("op2", op2_info[0])      # type: ignore
+                self.set_operand_address("op2", op2_info[1])    # type: ignore
             except ValueError as e:
                 raise ValueError(e)
     
@@ -364,6 +364,8 @@ class Control_Unit:
         :type value: int
         :raises ValueError: If an invalid operand identifier is used
         """
+        if isinstance(value, bytes):
+            value = int(value, 0)
         if operand == "both":
             self.op1_value = value
             self.op2_value = value
@@ -652,22 +654,21 @@ class Control_Unit:
         # Fallback for 64-bit
         return reg, self.MASKS_DIRECTIVES['qword']
 
-    def get_constant_encoded_value(self, label: str) -> int:
+    def get_encoded_value(self, value: str | int) -> int:
         """
-        Processes the value of a constant declaration to be returned as an integer.
+        Processes a given value of type string or int to be returned as an integer.
         
-        :param label: Label of the constant
-        :type label: str
-        :return: Integer value of the constant's declared value
+        :param value: Value to be processed
+        :type value: str | int
+        :return: Integer value of the given value
         :rtype: int
         """
-        constant_value: int | str = self.constants[label]['value']
-
-        if isinstance(constant_value, int):
-            return int(constant_value, 0)   #type: ignore
+        if re.match(self.NUMBER_REPRESENTATION_PATTERN, str(value)):
+            return int(value, 0)   #type: ignore
         else:
             # The value is a String
-            byte_value: bytes = str(constant_value).encode()
+            new_value: str = str(value).replace('"', '').replace("'", "")
+            byte_value: bytes = str(new_value).encode()
             return int.from_bytes(byte_value, 'little')
             
 
@@ -883,7 +884,7 @@ class Control_Unit:
                 elif Segment_Mapper.exists_in_section(element, self.constants):
                     if not self.is_valid_line_for_constant(int(self.constants[element]['line'])):
                         raise ValueError(f"Constant {element} is not yet defined")
-                    constant_value: str = str(self.get_constant_encoded_value(element))
+                    constant_value: str = str(self.get_encoded_value(self.constants[element]['value']))
                     ret.append(constant_value)
                 else:
                     raise ValueError(f"INVALID LABEL {element} IN MEMORY ADDRESSING MODE {expression} AT LINE {self.rip}!")
