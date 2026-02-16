@@ -59,8 +59,6 @@
         - status: unsuccessful exit due to incorrect .bss format detected in parsing phase
     - code: -3
         - status: unsuccessful exit due to incorrect constant declaration format detected
-    - code: -4
-        - status: 
 
 ## Folder Structure
     project-folder/
