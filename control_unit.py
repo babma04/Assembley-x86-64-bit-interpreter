@@ -34,8 +34,8 @@ class Control_Unit:
         # Initialize Control Unit with memory, segment mapper, funtional units and registers (general purpose, fpu and flags)
         self.memory: Data_Memory = memory
         self.loader: Segment_Mapper = loader
-        self.alu: ALU = ALU(self)
-        self.fpu: FPU = FPU(self)
+        self.alu: ALU = ALU()
+        # self.fpu: FPU = FPU(self)     NOT ACTIVE IN THE CURRENT VERSION
 
         self.registers: dict[str, int] = {
             # General Purpose Registers (64-bit Integers)
@@ -101,16 +101,20 @@ class Control_Unit:
                 self.finished = True
     
     def step(self) -> None:
-        # 1. Gets the instruction, operands and funtional unit in use and verifies it's compatibility it the operator count of the instruction
-        self.fetch()
-        # current_instruction will only be 'None' if rip points to a label in .text (which should be skiped)
-        if self.current_instruction != None:
-            # 2. Verifies if the instruction-operand set is valid and triggers the execution of the instruction in the respective funtional unit
-            self.execute()
-            # 4. Verifies if the execution generated any type of side effects of flags and halted state and updates them
-            self.validate_execution_state()
-            # 5. Increases rip 
-        self.rip += 1
+        try:
+            # 1. Gets the instruction, operands and funtional unit in use and verifies it's compatibility it the operator count of the instruction
+            self.fetch()
+            # current_instruction will only be 'None' if rip points to a label in .text (which should be skiped)
+            if self.current_instruction != None:
+                # 2. Verifies if the instruction-operand set is valid and triggers the execution of the instruction in the respective funtional unit
+                self.execute()
+                # 4. Verifies if the execution generated any type of side effects of flags and halted state and updates them
+                self.validate_execution_state()
+                # 5. Increases rip 
+            self.rip += 1
+        except ValueError as e:
+            print(e)
+            sys.exit(1) 
 
     def fetch(self) -> None:
         """
@@ -118,16 +122,20 @@ class Control_Unit:
         Sets the current instruction and current funtional unit in use and validates and sets the operands and its size.
         Raises a ValueError if the instruction is invalid or if the operands are invalid.        
         
-        :raises ValueError: If the instruction is invalid or if the operands are invalid.
         :return: None
         :rtype: None
+        :raises ValueError: If the instruction is invalid or if the operands are invalid.
         """
         line: list[str] = self.text_section[self.rip]
 
+        # Verifies if the line is a label declaration and skips it if so
         if len(line) == 1 and line[0] in self.labels:
             return 
+        # Verifies if the line is an instruction and sets the instruction, f.u. in use and operand info needed for execution (size, type, value, address)
         elif self.is_valid_instruction(line[0]):
             self.curretent_instruction = line[0]
+
+            # This block might raise an exception if it ran into bad syntax or impossible operations/operands
             try:
                 self.validate_operands(line)
                 self.set_operand_type(line)
@@ -136,16 +144,34 @@ class Control_Unit:
                 print(f"Error at line {self.rip}: {e}")
                 self.current_instruction = None
                 self.finished = True
-                
+
+            # Verifies if the number of operands registered are compatible with the instructions documentation in the valid_instructions json file    
             if self.valid_operand_count():
                 return
             else:
+                # If incompatible reset all info to a Null value and raise an exception
                 self.set_operand("both", None, 0)
                 raise ValueError(f"INVALID OPERAND COUNT FOR INSTRUCTION {self.curretent_instruction} AT LINE {self.rip}!")
+        
+        # If the instruction wasn't found, raise an excpetion
         else:
             raise ValueError(f"INVALID INSTRUCTION AT LINE {self.rip}!")
     
-
+    def execute(self) -> None:
+        """
+        Transfers executions to the class with the funtional unit responsible for the instaruction
+        in the current instruction in this class's respective instance
+        and retrives the result of the operation if any and the flags state that resulted from the operation.
+        
+        """
+        ...
+    def velidate_execution_state(self) -> None:
+        """
+        Docstring for velidate_execution_state
+        
+        :param self: Description
+        """
+        ...
 
     #-----------------------------------
     # General validation methods

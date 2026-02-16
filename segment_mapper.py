@@ -26,8 +26,6 @@ class Segment_Mapper:
     :param stack_limit: Minimum allowed value for the stack pointer
     :type stack_limit: int
     :return: None
-    :raises SyntaxError: If there are syntax errors in segment declarations or constant definitions
-    :raises OverflowError: If stack overflow occurs during stack initialization
     """
     # Memory footprint optimization 
     __slots__ = (
@@ -162,8 +160,8 @@ class Segment_Mapper:
         index += 1
         while(self.memory_list[index][0] != "section" or index >= len(self.memory_list)):
             tokens: list[str] = self.memory_list[index]
-            if not self.data_format_validatiion(tokens, index, section):
-                sys.exit(0)
+            if not self.data_format_validation(tokens, index, section):
+                sys.exit(-1)
             elif "times" in tokens:
                 current_rip = self.load_timed_data(tokens, index, section, current_rip)
             elif len(tokens) >= 3:
@@ -174,7 +172,7 @@ class Segment_Mapper:
             
         return current_rip
 
-    def data_format_validatiion(self, line: list[str], index: int, section: str) -> bool:
+    def data_format_validation(self, line: list[str], index: int, section: str) -> bool:
         """
         Validates the format of a .data or .rodata declaration line.
 
@@ -319,7 +317,7 @@ class Segment_Mapper:
         while(self.memory_list[index][0] != "section" or index >= len(self.memory_list)):
             tokens: list[str] = self.memory_list[index]
             if not self.bss_format_validation(tokens, index):
-                sys.exit(0)
+                sys.exit(-2)
             times: int = int(tokens[2])
             number_of_bytes: int = self.DIRECTIVES[tokens[1]][0]    
             size: int = number_of_bytes * times
@@ -383,7 +381,7 @@ class Segment_Mapper:
         validity: int = self.find_start(tokens, self.memory_list[index + 1])
         if (validity == 1 or validity == -1):
             print(f"NO VALID GLOBAL {self.valid_start} DECLARATION FOUND. Exiting program...")
-            sys.exit(0)
+            sys.exit(1)
         index += 1 # Move index to the line after the start declaration
         self.rip = index # Set instruction pointer to the line after the start declaration
         self.fetch_labels(index)
@@ -425,7 +423,7 @@ class Segment_Mapper:
             elif len(line) == 1 and line[0].endswith(":"):
                 if (Segment_Mapper.exists_in_section(line[0], self.labels)):
                     print(f"Label {line[0]} is duplicate on line {index}. Exiting program on a SyntaxError...")
-                    sys.exit(0)
+                    sys.exit(2)
                 else:
                     self.labels[line[0]] = index
             index += 1
@@ -505,7 +503,7 @@ class Segment_Mapper:
         :type index: int
         """
         if not self.is_valid_constant_declaration(line, index):
-            sys.exit(0)
+            sys.exit(-3)
         self.constants[line[0]]['line'] = index
         if Segment_Mapper.has_size_calculation(line):
             variable: str = line[len(line)-1]
@@ -515,7 +513,7 @@ class Segment_Mapper:
                 value: int | str = self.get_constant_value(line[2], index)
             except ValueError as e:
                 print(e)
-                sys.exit(0)
+                sys.exit(-3)
         self.constants[line[0]]['value'] = value    # Only values not passed as bytes
 
     def get_size_constant_value(self, variable: str, index: int, label: str) -> int | str:
@@ -545,6 +543,7 @@ class Segment_Mapper:
         :type value: str
         :return: value of the constant (int or str)
         :rtype: int | str
+        :raises ValueError: If an invalid constant declaraion is detected
         """
         if re.match(r'^\d+$', value):
             return int(value)
@@ -634,7 +633,7 @@ class Segment_Mapper:
                 self.check_stack_limit(memory, stack_limit)
             except OverflowError as e:
                     print(e)
-                    sys.exit(0)
+                    sys.exit(16)
 
     def check_stack_limit(self, memory: Data_Memory, stack_limit: int) -> None:
         """

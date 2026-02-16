@@ -43,7 +43,24 @@
         ex.:
         - What to avoid: mov eax, 3.14
         - Correct version: mov eax, 3
-
+### Exit codes status reference:
+- Valid exit codes:
+    - code: 0
+        - status: successful exit
+    - code: 1
+        - status: unsuccessful exit due to not finding an entry point to the program in .text parsing
+    - code: 2
+        - status: unsuccessful exit due to finding a duplicated label declaration in .text parsing
+    - code: 16
+        - status: unsuccessful exit due to stack overflow is detected (stack exceeds its allowed size)
+    - code: -1
+        - status: unsuccessful exit due to incorrect .data/.rodata  format detected in parsing phase
+    - code: -2
+        - status: unsuccessful exit due to incorrect .bss format detected in parsing phase
+    - code: -3
+        - status: unsuccessful exit due to incorrect constant declaration format detected
+    - code: -4
+        - status: 
 
 ## Folder Structure
     project-folder/
