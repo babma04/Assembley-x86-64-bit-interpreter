@@ -47,6 +47,8 @@
 - Valid exit codes:
     - code: 0
         - status: successful exit
+    - code: 109101  (aka "me" in ascii)
+        - status: unsuccessful exit due to a sofware bug
     - code: 1
         - status: unsuccessful exit due to not finding an entry point to the program in .text parsing
     - code: 2

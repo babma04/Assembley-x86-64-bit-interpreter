@@ -26,7 +26,9 @@ class Control_Unit:
     REGISTER_PATTERN = fr'{GENERAL_PURPOSE_REGISTERS_PATTERN}|{FPU_REGISTERS_PATTERN}'
     CONSTANTS_AND_LABELS_PATTERN = r'\b[a-zA-Z_]\w*\b'
     DIRECT_AND_BASE_ADDRESSING_PATTERN = fr'^\[(?:\s*){COMPONENTS_ADDRESSING_PATTERN}(?:\s)*([\+\-](?:\s)*{COMPONENTS_ADDRESSING_PATTERN})*(?:\s)*\]$'
-    INDIRECT_ADDRESSING_PATTERN = fr'^\[(?:\s*){COMPONENTS_ADDRESSING_PATTERN}(?:\s)*([\+\-\*](?:\s)*{COMPONENTS_ADDRESSING_PATTERN})*(?:\s)*\]$'
+    INDEXED_ADDRESSING_PATTERN = fr'^\[(?:\s*){COMPONENTS_ADDRESSING_PATTERN}(?:\s)*([\+\-\*](?:\s)*{COMPONENTS_ADDRESSING_PATTERN})*(?:\s)*\]$'
+    MEMORY_ADDRESSING_PATTERN = fr'^{INDEXED_ADDRESSING_PATTERN}|{DIRECT_AND_BASE_ADDRESSING_PATTERN}$'
+    OPERAND_PATTERN = fr'{MEMORY_ADDRESSING_PATTERN}|{REGISTER_PATTERN}|{IMMEDIATE_VALUE_PATTERN}{CONSTANTS_AND_LABELS_PATTERN}'
     
 
 
@@ -165,9 +167,9 @@ class Control_Unit:
         
         """
         ...
-    def velidate_execution_state(self) -> None:
+    def validate_execution_state(self) -> None:
         """
-        Docstring for velidate_execution_state
+        Docstring for validate_execution_state
         
         :param self: Description
         """
@@ -187,11 +189,107 @@ class Control_Unit:
         :return: True if the instruction is present in the valid_instructions.json file
         :rtype: bool
         """
-        for key in self.valid_instructions.keys():
-            if instruction in self.valid_instructions[key]:
-                self.current_fu = key
+        for funtional_units in self.valid_instructions.keys():
+            if instruction in self.valid_instructions[funtional_units]:
+                self.current_fu = funtional_units
                 return True
         return False
+
+### UPDATED BLOCK TO BE ORGANIZED ------------------------------    
+    def get_operand_info(self, line: list[str]) -> list[str]:
+        """
+        Dinamically parses the operand declarations of an instruction.\n
+        Tries to match size key words and skips over the expected operand, if it finds one else raises an exception. Also tries to match unspecified sized operands and tries to get their size (if register).
+        If doesnt match either a size keyword or an operand format raises a SyntaxError.\n
+        Returns pairs of sizes and operand expressions used in the declaration as list elements (always 4 elements but the sizes could be '""')
+        
+        :param line: Line of code in which the operands are declared without the instruction previously removed
+        :type line: list[str]
+        :return: List os size and operand expression pairs always following the format: [size;op2;size;op1]
+        :rtype: list[str]
+        :raises SyntaxError: If comes accross an invalid syntax format for assembly x86-64bit code
+        :raises ValueError: If comes accross a software bug (Unexpected but preventive)
+        """
+        ret_list: list[str] = []
+        max_ret_value: int = 3  # 4 list elements
+        length: int = len(line) - 1
+
+        for i in range(len(line)):
+            if line[i] in self.SIZE_DIRECTIVES.keys():
+                if i == length:
+                    raise SyntaxError(f"INVALID SYNTAX FORMAT AT LINE {self.rip}!")
+                elif not re.match(fr'^({self.OPERAND_PATTERN})$',line[i+1 - length]):
+                    raise SyntaxError(f"INVALID SYNTAX FORMAT AT LINE {self.rip}!")
+                else:
+                    if max_ret_value <= 1:
+                        raise ValueError("Program parsing ran into a problem! Aborting execution ...")
+                    ret_list[max_ret_value] = line[i+1]
+                    ret_list[max_ret_value-1] = str(self.SIZE_DIRECTIVES[line[i]])
+                    i += 1
+                    max_ret_value -= 2
+            elif re.match(fr'^({self.OPERAND_PATTERN})$',line[i-length]):
+                ret_list[max_ret_value] = line[i]
+                if self.is_register(line[i]):
+                    try:
+                        ret_list[max_ret_value-1] = str(self.get_register_size(line[i]))
+                    except SyntaxError as e:
+                        print(e)
+                        sys.exit(...)
+                    max_ret_value -= 2
+                else:
+                    ret_list[max_ret_value-1] = ""
+                    max_ret_value -= 2
+            else:
+                raise ValueError("Program parsing ran into a problem! Aborting execution ...")
+        return ret_list
+    
+    def parse_operand_info(self, op_info: list[str]) -> None:
+        """
+        Attributes the size and expression value of each operand to the respective instances of this class.\n
+        If comes accross a non declared size and there are no registers in the instruction raises SyntaxError. If any of the expressions for the operands are not set raises ValueError
+        
+        :param op_info: List with the size and expression of each operand as a pair in the format: [size;op2;size;op1]
+        :type op_info: list[str]
+        :raises SyntaxError: If comes accross undeclared sizes with out registers in the instruction.
+        :raises ValueError: If any of the operand expressions are not set.
+        """
+        # Failsafe verification
+        if op_info[3] == "" or op_info[1] == "":
+            raise ValueError("Program parsing ran into a problem! Aborting execution ...")
+        # If any operand doesn't have size and there is no registers in the instruction the syntax is invalid
+        elif (op_info[0] == "" or op_info[2] == "") and not (self.is_register(op_info[1]) or self.is_register(op_info[3])):
+            raise SyntaxError(f"INVALID SYNTAX FORMAT AT LINE {self.rip}!")
+        else:
+            if op_info[0] == "" or op_info[2] == "":
+                if self.is_register(op_info[1]):
+                    op_info[2] = op_info[0]
+                else:
+                    op_info[0] = op_info[2]
+            self.set_operand("op1", op_info[3], int(op_info[2]))
+            self.set_operand("op2", op_info[1], int(op_info[0]))
+    
+    def get_register_size(self, register: str) -> int:
+        """
+        Returns the size of a register as a number of bytes it takes (1-8)
+        
+        :param register: Register expression
+        :type register: str
+        :return: Size in number of bytes of the given register
+        :rtype: int
+        :raises SyntaxError: If no register match happend (Fail safe mechanism)
+        """
+        register = register.lower()
+
+        if register in self.registers.keys():
+            return 8
+        elif register.startswith('e') or register.endswith('d'):
+            return 4
+        elif register.endswith('x') or register.endswith('i') or register.endswith('w'):
+            return 2
+        elif register.endswith('h') or register.endswith('l') or register.endswith('b'):
+            return 1
+        else:
+            raise SyntaxError(f"INVALID REGISTER '{register}' FOUND!")
     
     def validate_operands(self, line: list[str]) -> None:
         """
@@ -207,91 +305,110 @@ class Control_Unit:
         if instruction_length == 1:
             try:
                 self.set_operand("both", None, 0)
+                return
             except ValueError as e:
                 raise ValueError(e)
-            
-        elif instruction_length == 2:
-            self.set_operand("op2", None, 0)
-            try:
-                operand_info: list[str] = self.get_operand(line[1])
-                self.set_operand("op1", operand_info[0], int(operand_info[1]))
-            except ValueError as e:
-                self.set_operand("op1", None, 0)
-                raise ValueError(e)
-            
-        elif instruction_length == 3:
-            if line[1] in self.SIZE_DIRECTIVES.keys():
-                self.set_operand("op2", None, 0)
-                try:
-                    operand_info: list[str] = self.get_operand(line[2])
-                    self.set_operand("op1", operand_info[0], int(operand_info[1]))
-                except ValueError as e:
-                    self.set_operand("op1", None, 0)
-                    raise ValueError(e)
-            elif line[2] in self.SIZE_DIRECTIVES.keys():
-                self.set_operand("both", None, 0)
-                raise ValueError(f"INVALID OPERAND SET FOR INSTRUCTION {self.curretent_instruction} AT LINE {self.rip}!")
-            else:
-                try:
-                    operand2_info: list[str] = self.get_operand(line[1])
-                    operand1_info: list[str] = self.get_operand(line[2])
-                    self.set_operand("op1", operand1_info[0], int(operand1_info[1]))
-                    self.set_operand("op2", operand2_info[0], int(operand2_info[1]))
-                except ValueError as e:
-                    self.set_operand("op1", None, 0)
-                    self.set_operand("op2", None, 0)
-                    raise ValueError(e)
-                
-        elif instruction_length == 4:
-                if line[3] in self.SIZE_DIRECTIVES.keys() or line[1] in self.SIZE_DIRECTIVES.keys() and line[2] in self.SIZE_DIRECTIVES.keys():
-                    self.set_operand("both", None, 0)
-                    raise ValueError(f"INVALID SYNTAX FOR INSTRUCTION {self.curretent_instruction} AT LINE {self.rip}!")
-                elif line[1] in self.SIZE_DIRECTIVES.keys():
-                    if line[2] in self.SIZE_DIRECTIVES.keys():
-                        self.set_operand("both", None, 0)
-                        raise ValueError(f"INVALID SYNTAX FOR INSTRUCTION {self.curretent_instruction} AT LINE {self.rip}!")
-                    else:
-                        try:
-                            operand2_info: list[str] = self.get_operand(line[2])
-                            operand1_info: list[str] = self.get_operand(line[3])
-                            self.set_operand("op1", operand1_info[0], int(operand1_info[1]))
-                            self.set_operand("op2", operand2_info[0], self.SIZE_DIRECTIVES[line[1]])
-                        except ValueError as e:
-                            self.set_operand("op1", None, 0)
-                            self.set_operand("op2", None, 0)
-                            raise ValueError(e)
-                elif line[2] in self.SIZE_DIRECTIVES.keys():
-                    try:
-                        operand1_info: list[str] = self.get_operand(line[3])
-                        operand2_info: list[str] = self.get_operand(line[1])
-                        self.set_operand("op1", operand1_info[0], self.SIZE_DIRECTIVES[line[2]])
-                        self.set_operand("op2", operand2_info[0], int(operand2_info[1]))
-                    except ValueError as e:
-                        self.set_operand("op1", None, 0)
-                        self.set_operand("op2", None, 0)
-                        raise ValueError(e)
-                else:
-                    # Will never happen 
-                    self.set_operand("both", None, 0)
-                    raise ValueError(f"INVALID SYNTAX FOR INSTRUCTION {self.curretent_instruction} AT LINE {self.rip}!")
-        elif instruction_length == 5:
-            if line[1] in self.SIZE_DIRECTIVES.keys() and line[3] in self.SIZE_DIRECTIVES.keys():
-                try:
-                    operand2_info: list[str] = self.get_operand(line[2])
-                    operand1_info: list[str] = self.get_operand(line[4])
-                    self.set_operand("op1", operand1_info[0], self.SIZE_DIRECTIVES[line[3]])
-                    self.set_operand("op2", operand2_info[0], self.SIZE_DIRECTIVES[line[1]])
-                except ValueError as e:
-                    self.set_operand("op1", None, 0)
-                    self.set_operand("op2", None, 0)
-                    raise ValueError(e)
-            else:
-                self.set_operand("both", None, 0)
-                raise ValueError(f"INVALID SYNTAX FOR INSTRUCTION {self.curretent_instruction} AT LINE {self.rip}!")
-            
-        else:
+        elif instruction_length > 5:
             self.set_operand("both", None, 0)
             raise ValueError(f"INVALID SYNTAX FOR INSTRUCTION {self.curretent_instruction} AT LINE {self.rip}!")
+        else:
+            try:
+                operand_info: list[str] = self.get_operand_info(line[1:]) 
+                self.parse_operand_info(operand_info)
+            except ValueError as e:
+                print(e)
+                sys.exit(109101)
+            except SyntaxError as e:
+                print(e)
+                sys.exit(...)
+    
+
+        # TO BE REVIEWED FOR DELETION
+            
+        # elif instruction_length == 2:
+        #     self.set_operand("op2", None, 0)
+        #     try:
+        #         operand_info: list[str] = self.get_operand(line[1])
+        #         self.set_operand("op1", operand_info[0], int(operand_info[1]))
+        #     except ValueError as e:
+        #         self.set_operand("op1", None, 0)
+        #         raise ValueError(e)
+            
+        # elif instruction_length == 3:
+        #     if line[1] in self.SIZE_DIRECTIVES.keys():
+        #         self.set_operand("op2", None, 0)
+        #         try:
+        #             operand_info: list[str] = self.get_operand(line[2])
+        #             self.set_operand("op1", operand_info[0], int(operand_info[1]))
+        #         except ValueError as e:
+        #             self.set_operand("op1", None, 0)
+        #             raise ValueError(e)
+        #     elif line[2] in self.SIZE_DIRECTIVES.keys():
+        #         self.set_operand("both", None, 0)
+        #         raise ValueError(f"INVALID OPERAND SET FOR INSTRUCTION {self.curretent_instruction} AT LINE {self.rip}!")
+        #     else:
+        #         try:
+        #             operand2_info: list[str] = self.get_operand(line[1])
+        #             operand1_info: list[str] = self.get_operand(line[2])
+        #             self.set_operand("op1", operand1_info[0], int(operand1_info[1]))
+        #             self.set_operand("op2", operand2_info[0], int(operand2_info[1]))
+        #         except ValueError as e:
+        #             self.set_operand("op1", None, 0)
+        #             self.set_operand("op2", None, 0)
+        #             raise ValueError(e)
+                
+        # elif instruction_length == 4:
+        #         if line[3] in self.SIZE_DIRECTIVES.keys() or line[1] in self.SIZE_DIRECTIVES.keys() and line[2] in self.SIZE_DIRECTIVES.keys():
+        #             self.set_operand("both", None, 0)
+        #             raise ValueError(f"INVALID SYNTAX FOR INSTRUCTION {self.curretent_instruction} AT LINE {self.rip}!")
+        #         elif line[1] in self.SIZE_DIRECTIVES.keys():
+        #             if line[2] in self.SIZE_DIRECTIVES.keys():
+        #                 self.set_operand("both", None, 0)
+        #                 raise ValueError(f"INVALID SYNTAX FOR INSTRUCTION {self.curretent_instruction} AT LINE {self.rip}!")
+        #             else:
+        #                 try:
+        #                     operand2_info: list[str] = self.get_operand(line[2])
+        #                     operand1_info: list[str] = self.get_operand(line[3])
+        #                     self.set_operand("op1", operand1_info[0], int(operand1_info[1]))
+        #                     self.set_operand("op2", operand2_info[0], self.SIZE_DIRECTIVES[line[1]])
+        #                 except ValueError as e:
+        #                     self.set_operand("op1", None, 0)
+        #                     self.set_operand("op2", None, 0)
+        #                     raise ValueError(e)
+        #         elif line[2] in self.SIZE_DIRECTIVES.keys():
+        #             try:
+        #                 operand1_info: list[str] = self.get_operand(line[3])
+        #                 operand2_info: list[str] = self.get_operand(line[1])
+        #                 self.set_operand("op1", operand1_info[0], self.SIZE_DIRECTIVES[line[2]])
+        #                 self.set_operand("op2", operand2_info[0], int(operand2_info[1]))
+        #             except ValueError as e:
+        #                 self.set_operand("op1", None, 0)
+        #                 self.set_operand("op2", None, 0)
+        #                 raise ValueError(e)
+        #         else:
+        #             # Will never happen 
+        #             self.set_operand("both", None, 0)
+        #             raise ValueError(f"INVALID SYNTAX FOR INSTRUCTION {self.curretent_instruction} AT LINE {self.rip}!")
+        # elif instruction_length == 5:
+        #     if line[1] in self.SIZE_DIRECTIVES.keys() and line[3] in self.SIZE_DIRECTIVES.keys():
+        #         try:
+        #             operand2_info: list[str] = self.get_operand(line[2])
+        #             operand1_info: list[str] = self.get_operand(line[4])
+        #             self.set_operand("op1", operand1_info[0], self.SIZE_DIRECTIVES[line[3]])
+        #             self.set_operand("op2", operand2_info[0], self.SIZE_DIRECTIVES[line[1]])
+        #         except ValueError as e:
+        #             self.set_operand("op1", None, 0)
+        #             self.set_operand("op2", None, 0)
+        #             raise ValueError(e)
+        #     else:
+        #         self.set_operand("both", None, 0)
+        #         raise ValueError(f"INVALID SYNTAX FOR INSTRUCTION {self.curretent_instruction} AT LINE {self.rip}!")
+            
+        # else:
+        #     self.set_operand("both", None, 0)
+        #     raise ValueError(f"INVALID SYNTAX FOR INSTRUCTION {self.curretent_instruction} AT LINE {self.rip}!")
+
+### END OF BLOCK TO BE ORGANIZED    
     
     def valid_operand_count(self) -> bool:
         """
@@ -314,13 +431,13 @@ class Control_Unit:
 
     def set_operand(self, operand: str, expression: str | None, size: int) -> None:
         """
-        Attribute a value and size to the operand attributes
+        Attribute a declaration expression and a size to the respective attributes  of the specified operand.
 
-        :param operand: Expression for the operand to update (both/op1/op2)
+        :param operand: Expression for which operand(s) to update (both/op1/op2)
         :type operand: str
-        :param expression: Unaltered expression used to refer to the operand
+        :param expression: Unaltered expression used to refer to the operand in the line of code
         :type expression: str | None
-        :param size: Size of the operand (must be calculated)
+        :param size: Number of bytes used by the operand(s)
         :type size: int
         :raises ValueError: If an invalid operand identifier is used
         """
@@ -772,7 +889,7 @@ class Control_Unit:
         :rtype: bool
         :raises ValueError: If an invalid label is found in the expression
         """
-        if re.match(self.INDIRECT_ADDRESSING_PATTERN, expression):
+        if re.match(self.INDEXED_ADDRESSING_PATTERN, expression):
             labels: list[str] = self.get_labels(expression)
             registers_in_expression: list[str] = re.findall(self.REGISTER_PATTERN, expression)
             if 'Invalid' in labels:
