@@ -232,12 +232,15 @@ class Control_Unit:
         :return: True if the current operand count is valid for the current instruction
         :rtype: bool
         """
-        expected_operand_count: int = self.valid_instructions[self.current_fu][self.curretent_instruction]  # type: ignore
+        # Gets the number of expected arguiments of an instruction based on the valid_instructions.json file
+        expected_operand_count: int = self.valid_instructions[self.current_fu][self.curretent_instruction]
+        # Gets the number of operands in use for for the current instruction   
         actual_operand_count: int = 0
         if self.op1 != None:
             actual_operand_count += 1
         if self.op2 != None:
             actual_operand_count += 1
+        # Returns if they both match (valid operand count)    
         return expected_operand_count == actual_operand_count        
 
     #---------------------------
@@ -278,6 +281,7 @@ class Control_Unit:
         :type line: list[str]
         :raises ValueError: If an invalid label is found during operand type determination
         """
+        # For each of the attributes that hold the operands expression, if they are not None get their type
         if self.op1 != None:
             try:
                 self.op1_type = self.determine_operand_type(self.op1)
@@ -368,23 +372,27 @@ class Control_Unit:
         :rtype: str
         :raises ValueError: If an invalid label is found during operand type determination or if the operand does not match any valid type
         """
-        if self.is_direct_memory_addressing(operand):
-            return 'direct memory'
-        elif self.is_base_addessing(operand):
-            return 'base memory'
-        elif self.is_indexed_addressing(operand):
-            return 'indexed memory'
-        elif self.is_address(operand):
-            return 'address'
-        elif self.is_register(operand):
-            return 'register'
-        elif self.is_constant(operand):
-            return 'constant'
-        elif self.is_immediate_value(operand):
-            return 'immediate'
-        else:
-            # should never happen
-            raise ValueError(f"UNABLE TO DETERMINE OPERAND TYPE FOR {operand} AT LINE {self.rip}!")
+        try:
+            if self.verify_memory_addressing(operand, self.DIRECT_AND_BASE_ADDRESSING_PATTERN):
+                return 'direct memory'
+            elif self.verify_memory_addressing(operand,self.DIRECT_AND_BASE_ADDRESSING_PATTERN, 2):
+                return 'base memory'
+            elif self.verify_memory_addressing(operand, self.INDEXED_ADDRESSING_PATTERN, 2):
+                return 'indexed memory'
+            elif self.is_address(operand):
+                return 'address'
+            elif self.is_register(operand):
+                return 'register'
+            elif self.is_constant(operand):
+                return 'constant'
+            elif self.is_immediate_value(operand):
+                return 'immediate'
+            else:
+                # should never happen
+                raise ValueError(f"UNABLE TO DETERMINE OPERAND TYPE FOR {operand} AT LINE {self.rip}!")
+        except ValueError as e:
+            print(e)
+            sys.exit(...)
     
     ### RETURNOF BYTES MUST BE DELT WITH
 
@@ -561,7 +569,7 @@ class Control_Unit:
         for item in found_labels:
             if not (Segment_Mapper.exists_in_section(item, self.data_section) or Segment_Mapper.exists_in_section(item, self.rodata_section) or Segment_Mapper.exists_in_section(item, self.bss_section)):
                     return ['Invalid']
-            elif Segment_Mapper.exists_in_section(item, self.data_section) or Segment_Mapper.exists_in_section(item, self.rodata_section) or Segment_Mapper.exists_in_section(item, self.bss_section):
+            else:
                 labels.append(item)
         return labels
 
@@ -725,72 +733,41 @@ class Control_Unit:
         :raises ValueError: If an invalid label is found in the expression
         """
         try:
-            result: bool = self.is_direct_memory_addressing(expression) or self.is_base_addessing(expression) or self.is_indexed_addressing(expression)
+            result: bool = self.verify_memory_addressing(expression, self.DIRECT_AND_BASE_ADDRESSING_PATTERN) or self.verify_memory_addressing(expression,self.DIRECT_AND_BASE_ADDRESSING_PATTERN, 2) or self.verify_memory_addressing(expression, self.INDEXED_ADDRESSING_PATTERN, 2)
         except ValueError as e:
             raise ValueError(e)
         return result
     
-    def is_direct_memory_addressing(self, expression: str) -> bool:
+    def verify_memory_addressing(self, expression: str, pattern: str, number_registers: int=0, number_labels: int=1) -> bool:
         """
-        Verifies if a given expression is a direct memory addressing mode
+        Verifies if a given expression is a direct, base or indexed memory addressing mode based on the number of registers and labels allowed to be used in it and the pattern to use for the verification.\n
+        If the expression is none of those and does not take invalid registers or not existing labels  returns False.
+        If any invalid or not existing components are found raises a ValueError.
 
         :param expression: Expression in verification
         :type expression: str
-        :return: True if the expression is a direct memory addressing mode
+        :param pattern: Pattern to use for the match
+        :type pattern: str
+        :param number_registers: Number of registers allowed in the expression. Default to 0.
+        :type number_registers: int
+        :param number_labels: Number of labels allowed in the expression. Default to 1.
+        :type number_labels: int
+        :return: True if the expression follows the pattern given and has the correct number of each component or False otherwise.
         :rtype: bool
         :raises ValueError: If an invalid label is found in the expression
         """
-        if re.match(self.DIRECT_AND_BASE_ADDRESSING_PATTERN, expression):
-            labels: list[str] = self.get_labels(expression)
-            if 'Invalid' in labels:
-                raise ValueError(f"INVALID LABEL IN MEMORY ADDRESSING MODE {expression} AT LINE {self.rip}!")
-            if len(labels) > 1:
-                return False
-            return True
-        return False
-    
-    def is_base_addessing(self, expression: str) -> bool:
-        """
-        Verifies if a given expression is a base addressing mode
-
-        :param expression: Expression in verification
-        :type expression: str
-        :return: True if the expression is a base addressing mode
-        :rtype: bool
-        :raises ValueError: If an invalid label is found in the expression
-        """
-        if re.match(self.DIRECT_AND_BASE_ADDRESSING_PATTERN, expression):
+        if re.match(pattern, expression):
+            # If a match with the Direct/Base memory addressing pattern was found get the list of the labels used in the expression and the list of registers used in the expression
             labels: list[str] = self.get_labels(expression)
             registers_in_expression: list[str] = re.findall(self.REGISTER_PATTERN, expression)
+            # If the list returned 'invalid' then non existing label was found
             if 'Invalid' in labels:
                 raise ValueError(f"INVALID LABEL IN MEMORY ADDRESSING MODE {expression} AT LINE {self.rip}!")
-            if len(labels) > 1:
+            # If there are more than label or registers involved in the expression than it is permitted by the arguments the expression is not syntactically correct
+            elif len(labels) > number_labels or len(registers_in_expression) > number_registers:
                 return False
-            elif len(registers_in_expression) > 2:
-                return False
-            return True
-        return False
-    
-    def is_indexed_addressing(self, expression: str) -> bool:
-        """
-        Verifies if a given expression is an indexed addressing mode
-
-        :param expression: Expression in verification
-        :type expression: str
-        :return: True if the expression is an indexed addressing mode
-        :rtype: bool
-        :raises ValueError: If an invalid label is found in the expression
-        """
-        if re.match(self.INDEXED_ADDRESSING_PATTERN, expression):
-            labels: list[str] = self.get_labels(expression)
-            registers_in_expression: list[str] = re.findall(self.REGISTER_PATTERN, expression)
-            if 'Invalid' in labels:
-                raise ValueError(f"INVALID LABEL IN MEMORY ADDRESSING MODE {expression} AT LINE {self.rip}!")
-            if len(labels) > 1:
-                return False
-            elif len(registers_in_expression) > 2:
-                return False
-            return True
+            else:
+                return True
         return False
     
     def is_address(self, expression: str) -> bool:
@@ -803,8 +780,10 @@ class Control_Unit:
         :rtype: bool
         :raises ValueError: If an invalid label is found in the expression
         """
-        if "[" in expression or "]" in expression:
+        # If the expression has the memory address brakets it is not an address
+        if expression.startswith('[') and expression.endswith(']'):
             return False
+        # Assuming it is an address, tries to match the components valid in an address declaration declaration and verify if they are valid
         elif re.match(fr'^{self.CONSTANTS_AND_LABELS_PATTERN}$', expression):
             if not (Segment_Mapper.exists_in_section(expression, self.data_section) or Segment_Mapper.exists_in_section(expression, self.rodata_section) or Segment_Mapper.exists_in_section(expression, self.bss_section)):
                 raise ValueError(f"INVALID LABEL {expression} AT LINE {self.rip}!")
