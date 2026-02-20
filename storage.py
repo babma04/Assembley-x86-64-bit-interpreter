@@ -191,7 +191,7 @@ class Storage:
                 
         :param file_name: name of the file that holds the settings
         :type file_name: str
-        :return: the valid instructions for the current state if this program
+        :return: the valid instructions for the current state of this program
         :rtype: dict[str, dict[str, int]]
         """
         data: dict[str, str | dict[str, int]] = {}

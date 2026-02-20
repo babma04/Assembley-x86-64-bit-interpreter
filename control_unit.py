@@ -3,7 +3,7 @@ import re
 from storage import Storage
 from data_memory import Data_Memory
 from segment_mapper import Segment_Mapper
-from .types import DataSectionInfo, BssSectionInfo, LabelMap, ConstantMap, Address
+from .types import DataSectionInfo, BssSectionInfo, LabelMap, ConstantMap
 from alu import ALU
 
 class Control_Unit:
@@ -77,12 +77,12 @@ class Control_Unit:
         self.current_instruction: str | None = None
         self.op1: str | None = None
         self.op1_size: int = 0  # size must be 0 if self.op1 = None
-        self.op1_value: int = 0 # value must be 0 if self.op1 = None
+        self.op1_value: bytes = b"" # value must be 0 if self.op1 = None
         self.op1_address: int | None = None # address must be None if self.op1 is not a memory operand
         self.op1_type: str | None = None # type must be None if self.op1 = None, otherwise it must be either 'direct memory'/'base memory'/'indexed memory'/'address'/'register'/'constant'/'immediate'
         self.op2: str | None = None
         self.op2_size: int = 0  # size must be 0 if self.op2 = None
-        self.op2_value: int = 0 # value must be 0 if self.op2 = None
+        self.op2_value: bytes = b"" # value must be 0 if self.op2 = None
         self.op2_address: int | None = None # address must be None if self.op2 is not a memory operand
         self.op2_type: str | None = None # type must be None if self.op2 = None, otherwise it must be either 'direct memory'/'base memory'/'indexed memory'/'address'/'register'/'constant'/'immediate'
         self.valid_instructions: dict[str, dict[str, int]] = Storage.read_valid_instructions(validation_file_name)
@@ -206,15 +206,24 @@ class Control_Unit:
         instruction_length: int = len(line)
 
         if instruction_length == 1:
+        # One element code line means a no explicit operand so set both to a Null value
             try:
                 self.set_operand("both", None, 0)
                 return
             except ValueError as e:
                 raise ValueError(e)
+            
         elif instruction_length > 5:
-            self.set_operand("both", None, 0)
+            # instructions with more than 5 elements means it is most definitely wrong syntax
+            try:
+                self.set_operand("both", None, 0)   # Will never return a ValueError
+            except ValueError as e:
+                print(e)
+                sys.exit(...)
             raise ValueError(f"INVALID SYNTAX FOR INSTRUCTION {self.curretent_instruction} AT LINE {self.rip}!")
+        
         else:
+            # If none of the above cases are triggered try to parse the operands and sizes
             try:
                 operand_info: list[str] = self.get_operand_info(line[1:]) 
                 self.parse_operand_info(operand_info)
@@ -301,22 +310,36 @@ class Control_Unit:
         :type line: list[str]
         :raises ValueError: If an invalid label is found during operand value or address determination
         """
+        # For each of the attributes that hold the operands expression, if they are not None get their address (if it is a memory reference) and value
+        operation_size: int = self.get_operation_size()
         if self.op1 != None:
             try:
-                op1_info: list[int|bytes | None]= self.determine_operand_value_and_address(self.op1, self.op1_type, self.memory)
-                self.set_operand_value("op1", op1_info[0])  # type: ignore
+                op1_info: tuple[bytes, int | None]= self.determine_operand_value_and_address(self.op1, self.op1_type, self.op1_size, operation_size, self.memory)
+                self.set_operand_value("op1", op1_info[0])  
                 self.set_operand_address("op1", op1_info[1])
             except ValueError as e:
                 raise ValueError(e)
         if self.op2 != None:
             try:
-                op2_info: list[int|bytes | None]= self.determine_operand_value_and_address(self.op2, self.op2_type, self.memory)
-                self.set_operand_value("op2", op2_info[0])      # type: ignore
-                self.set_operand_address("op2", op2_info[1])    # type: ignore
+                op2_info: tuple[bytes, int | None]= self.determine_operand_value_and_address(self.op2, self.op2_type, self.op1_size, operation_size, self.memory)
+                self.set_operand_value("op2", op2_info[0])      
+                self.set_operand_address("op2", op2_info[1])    
             except ValueError as e:
                 raise ValueError(e)
     
-    def set_operand_value(self, operand:str, value: int) -> None:
+    def get_operation_size(self) -> int:
+        """
+        Returns the size of the current operation to be executed, meaning the size of the biggest of the operands.\n
+        Will always return the biggestof the sizes in the current execution context.
+        To be used in contexts of constants or immidiate value parsing where size is not specified but needted for byte transformations of integer values.
+    
+        
+        :return: The size of the biggest operand in the current instruction
+        :rtype: int
+        """
+        return self.op1_size if self.op1_size > self.op2_size else self.op2_size
+
+    def set_operand_value(self, operand:str, value: bytes) -> None:
         """
         Attribute a value to the operand value attributes
 
@@ -325,9 +348,10 @@ class Control_Unit:
         :param value: Value of the operand (must be calculated)
         :type value: int
         :raises ValueError: If an invalid operand identifier is used
+        :raises SyntaxError: If any operator value with an invalid type (non byte) is passed to the execution of this method
         """
-        if isinstance(value, bytes):
-            value = int(value, 0)
+        if not isinstance(value, bytes):
+            raise SyntaxError("\n   Software bug detected.\nInvalid type for operator value. Values should always be bytes!")
         if operand == "both":
             self.op1_value = value
             self.op2_value = value
@@ -396,7 +420,7 @@ class Control_Unit:
     
     ### RETURNOF BYTES MUST BE DELT WITH
 
-    def determine_operand_value_and_address(self, operand: str, operand_type: str | None, memory: Data_Memory) -> list[int|bytes | None]:
+    def determine_operand_value_and_address(self, operand: str, operand_type: str | None, operand_size: int, operation_size: int, memory: Data_Memory) -> tuple[bytes, int|None]:
         """
         Determines the operand value and address based on its expression and type by going through the possible operand types and calculating the value and address accordingly.        
 
@@ -404,46 +428,41 @@ class Control_Unit:
         :type operand: str
         :param operand_type: Type of the operand to determine the value and address
         :type operand_type: str | None
+        :param operand_size: Number of bytes that the operand uses (1, 2, 4, 8)
+        :type operand_size: int
+        :param operation_size: Size of the current operation to be executed (size of the biggest dominant operator)
+        :type operation_size: int
         :param memory: Data memory instance to retrieve values from memory operands
         :type memory: Data_Memory
-        :return: List containing the operand value and address (address is None if not a memory operand)
-        :rtype: list[int | None]
+        :return: Tuple containing the operand value and address (address is None if not a memory operand)
+        :rtype: tuple[bytes, int | None]
         :raises ValueError: If an invalid label is found during operand value or address determination or if the operand type is invalid
         """
-        if operand_type == 'direct memory':
-            address: int = self.calculate_memory_address(operand)
-            value: bytes | int = memory.read_bytes(address, self.op1_size)  
-            return [value, address] 
-        elif operand_type == 'base memory':
-            address: int = self.calculate_memory_address(operand)
-            value: bytes | int = memory.read_bytes(address, self.op1_size)  
-            return [value, address] 
-        elif operand_type == 'indexed memory':
-            address: int = self.calculate_memory_address(operand)
-            value: bytes | int = memory.read_bytes(address, self.op1_size)  
-            return [value, address]
+        value: bytes = b"0"
+        address: int | None = None 
+
+        if operand_type == 'direct memory' or operand_type == 'base memory' or operand_type == 'indexed memory':
+            address = self.calculate_memory_address(operand)
+            value = memory.read_bytes(address, operand_size)  
         elif operand_type == 'address':
             if re.match(self.CONSTANTS_AND_LABELS_PATTERN, operand):
                 try:
-                    address: int = self.get_label_address(operand)
-                    return [address, None]
+                    value = self.get_label_address(operand).to_bytes(8, byteorder="little")
                 except ValueError as e:
                     raise ValueError(e)
             else:
                 # should never happen
                 raise ValueError(f"INVALID ADDRESS OPERAND {operand} AT LINE {self.rip}!")
         elif operand_type == 'register':
-            value: bytes | int = self.registers[operand]  # type: ignore
-            return [value, None]
+            value = self.get_register_value(operand).to_bytes(operand_size, byteorder="little")
         elif operand_type == 'constant':
-            value: bytes | int = self.constants[operand]  # type: ignore
-            return [value, None]
+            value  = self.get_encoded_value(self.constants[operand]['value']).to_bytes(operation_size, byteorder="little")
         elif operand_type == 'immediate':
-            value: bytes | int = self.parse_immediate_value(operand)    # Only supports direct decimal or string values, no calculations
-            return [value, None]
+            value  = self.get_encoded_value(operand).to_bytes(operation_size, byteorder="little")
         else:
             # should never happen
             raise ValueError(f"INVALID OPERAND TYPE {operand_type} AT LINE {self.rip}!")
+        return (value, address)
 
 
     #----------------------
