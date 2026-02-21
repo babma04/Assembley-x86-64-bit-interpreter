@@ -62,6 +62,42 @@
     - code: -3
         - status: unsuccessful exit due to incorrect constant declaration format detected
 
+
+## Memory handelying:
+### Writing Memory:
+Memory writing is handeled by the Data_Memory class. This class encapsulates the bytearray structure the system RAM and is used throughout the execution context to fetch and write values.  
+
+#### Data normalization occurs in two stages:
+1. **Caller Level**: The initial class determines the target size and parsed the desired data to bytes.
+
+2. **Definitive Level**: The Data_Memory class ensures the bytes object perfectly match the requires hardware size before the write occurs.
+
+#### Structure of processed values to be written: 
+- **Initial Value:**
+    - int 0x1234 (Size: 4 bytes)
+- **Byte Conversion:**
+    - b'\34\12' (Length: 2)
+- **Final Processed Data:**
+    - b'\34\12\00\00' (Length: 4)
+
+#### Little endian implementation:
+    Byte writing will change the order by which values appear in the variable to be able to write them in a little endian format at the bytarray. In this format, and following the given example, the byte b'\34' will be written first at the base address and the following bytes of the processed data will be written in higher level addresses in a sequencial order.
+
+### Reading Memory:
+Memory reading will follow the same structure of the writing, returning the first value read at the first position of the bytes variable.
+
+#### Structure of read values:
+- **Address to Read and Number of Bytes**:
+    - 0x4001 (Size: 4 bytes)
+- **Value Returned:**
+    - b'\34\12\00\00'
+- **Real Value:**
+    - 0x1234
+
+#### Reading Logic:
+    Reading will always take a start address and a number of bytes to read. This method then will start reading bytes at the given address and stop only when the number of bytes above that address is met.
+
+
 ## Folder Structure
     project-folder/
     ├── main.py/

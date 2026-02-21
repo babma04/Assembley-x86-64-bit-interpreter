@@ -326,18 +326,6 @@ class Control_Unit:
                 self.set_operand_address("op2", op2_info[1])    
             except ValueError as e:
                 raise ValueError(e)
-    
-    def get_operation_size(self) -> int:
-        """
-        Returns the size of the current operation to be executed, meaning the size of the biggest of the operands.\n
-        Will always return the biggestof the sizes in the current execution context.
-        To be used in contexts of constants or immidiate value parsing where size is not specified but needted for byte transformations of integer values.
-    
-        
-        :return: The size of the biggest operand in the current instruction
-        :rtype: int
-        """
-        return self.op1_size if self.op1_size > self.op2_size else self.op2_size
 
     def set_operand_value(self, operand:str, value: bytes) -> None:
         """
@@ -550,6 +538,18 @@ class Control_Unit:
             ret.append(str(size))
         return ret
     
+    def get_operation_size(self) -> int:
+        """
+        Returns the size of the current operation to be executed, meaning the size of the biggest of the operands.\n
+        Will always return the biggestof the sizes in the current execution context.
+        To be used in contexts of constants or immidiate value parsing where size is not specified but needted for byte transformations of integer values.
+    
+        
+        :return: The size of the biggest operand in the current instruction
+        :rtype: int
+        """
+        return self.op1_size if self.op1_size > self.op2_size else self.op2_size
+    
     def get_register_size(self, register: str) -> int:
         """
         Returns the size of a register as a number of bytes it takes (1-8)
@@ -733,10 +733,6 @@ class Control_Unit:
             byte_value: bytes = str(new_value).encode()
             return int.from_bytes(byte_value, 'little')
             
-
-
-
-    
     #-------------------------
     # Operand type validation
     #-------------------------
@@ -876,7 +872,7 @@ class Control_Unit:
         :raises SyntaxError: If comes accross undeclared sizes with out registers in the instruction.
         :raises ValueError: If any of the operand expressions are not set.
         """
-        # Failsafe verification
+        # Fail safe verification
         if op_info[3] == "" or op_info[1] == "":
             raise ValueError("Program parsing ran into a problem! Aborting execution ...")
         # If any operand doesn't have size and there is no registers in the instruction the syntax is invalid
@@ -909,7 +905,6 @@ class Control_Unit:
             print(e)
             sys.exit(...)
         return self.get_address_value(parsed_address_expression, expression)
-
 
     def parse_address_expression(self, components: list[str], expression: str) -> list[str]:
         """
@@ -949,10 +944,7 @@ class Control_Unit:
                     raise ValueError(f"INVALID LABEL {element} IN MEMORY ADDRESSING MODE {expression} AT LINE {self.rip}!")
             else:
                 ret.append(element)
-        return ret
-        
-
-        
+        return ret        
 
     def verify_multiplication(self, components: list[str], expression: str) -> list[int]:
         """
@@ -985,12 +977,9 @@ class Control_Unit:
         else:
             return [0,-1]
     
-
-
     # -----------------------
     # STATIC HELPERS (might be moved onto a different file)
     # -----------------------
-
 
     @staticmethod
     def has_symbol(list: list[str], symbol: str) -> bool:
