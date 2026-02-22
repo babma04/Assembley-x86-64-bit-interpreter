@@ -1,7 +1,6 @@
 import sys
 from storage import Storage
 from data_memory import Data_Memory
-from control_unit import Control_Unit   # For types pattern usage
 from .types import DataSectionInfo, BssSectionInfo, LabelMap, ConstantMap, Address
 import re
 
@@ -52,6 +51,11 @@ class Segment_Mapper:
     """
 
     ELEMENTS_TO_SKIP = r'^[,\s]+$'  # Commas and whitespace to skip during parsing
+
+    # Patterns to use in the parsing of constants
+    NUMBER_REPRESENTATION_PATTERN = r'(0x[\da-fA-F]+|\d[\da-fA-F]*h|0b[01]+|[01]+b|0d\d+|[-+]?\d+d|[0-7]+[oq]|[-+]?\d+)'
+    WORD_OR_CHARACTERS_PATTERN = r'(\".*?\"|\'.*?\')'
+    IMMEDIATE_VALUE_PATTERN = fr'({NUMBER_REPRESENTATION_PATTERN}|{WORD_OR_CHARACTERS_PATTERN})'
     
     # Architecture Constants for sections start
     TEXT_BASE = 0x400000
@@ -467,7 +471,7 @@ class Segment_Mapper:
         
         elif Segment_Mapper.has_size_calculation(line) and not self.valid_size_calculation(line, index):
             return False
-        elif not re.match(fr'^{Control_Unit.IMMEDIATE_VALUE_PATTERN}$', line[2]) and not Segment_Mapper.has_size_calculation(line):
+        elif not re.match(fr'^{Segment_Mapper.IMMEDIATE_VALUE_PATTERN}$', line[2]) and not Segment_Mapper.has_size_calculation(line):
             print(f"INVALID CONSTANT DECLARATION AT LINE {index}. Exiting program on a SyntaxError...")
             return False
         return True
