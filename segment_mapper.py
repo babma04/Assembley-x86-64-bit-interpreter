@@ -1,7 +1,7 @@
 import sys
 from storage import Storage
 from data_memory import Data_Memory
-from .types import DataSectionInfo, BssSectionInfo, LabelMap, ConstantMap, Address
+from my_types import DataSectionInfo, BssSectionInfo, LabelMap, ConstantMap, Address
 import re
 
 class Segment_Mapper:

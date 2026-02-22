@@ -3,7 +3,7 @@ import re
 from storage import Storage
 from data_memory import Data_Memory
 from segment_mapper import Segment_Mapper
-from .types import DataSectionInfo, BssSectionInfo, LabelMap, ConstantMap, FU
+from my_types import DataSectionInfo, BssSectionInfo, LabelMap, ConstantMap, FU
 from data_path import Data_Path
 from alu import ALU
 from fpu import FPU
