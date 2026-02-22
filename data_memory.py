@@ -1,6 +1,3 @@
-#import sys
-
-
 class Data_Memory:
     """
     Simulates the full system memory with:
@@ -26,6 +23,8 @@ class Data_Memory:
     :rtype: Data_Memory
     """
 
+    RODATA_BASE: int = 0x500000
+
     def __init__(self, memory_base: int, stack_start: int = 0x7fffffffe000):
         self.start: int= memory_base
         # Memory as an array of 8-bit cells
@@ -49,6 +48,7 @@ class Data_Memory:
         :return: byte values at specific addresses
         :rtype: bytes
         """
+        addr -= Data_Memory.RODATA_BASE
         return self.memory[addr:addr + size]
     
     # Writing structure:

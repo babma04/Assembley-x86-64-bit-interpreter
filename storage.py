@@ -131,7 +131,7 @@ class Storage:
         if not os.path.isfile(file_name):
             data :dict[str, str | dict[str, int]]= {
                 'valid start': "_start", 
-                'cpu': {
+                'data_path': {
                     'mov': 2,
                     'halt': 0,
                     'cmp': 2,

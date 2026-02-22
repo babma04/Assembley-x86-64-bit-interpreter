@@ -1,5 +1,5 @@
-# Assembly x84 64 bit python compiler
-#### A simple assembly x84 64bit compiler with sequencial execution and error detector.
+# Assembly x84 64 bit python Interpreter
+#### A simple assembly x84 64bit interpreter with sequencial execution and error detection.
 
 
 ## About the Project
@@ -62,6 +62,8 @@
     - code: -3
         - status: unsuccessful exit due to incorrect constant declaration format detected
 
+## Sections Parsing
+(TODO)
 
 ## Memory handelying:
 ### Writing Memory:

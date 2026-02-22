@@ -1,4 +1,7 @@
 from typing import TypeAlias, Dict, List, Union
+from alu import ALU
+from data_path import Data_Path
+from fpu import FPU
 
 # Keep it simple and clean
 Address: TypeAlias = int
@@ -19,3 +22,5 @@ ConstantMap: TypeAlias = Dict[str, Dict[str, int | str]]
 
 # For getting info on the valid_instructions.json file
 InstructionSet: TypeAlias = Dict[str, Union[List[str], Dict[str, int]]]
+
+FU: TypeAlias = Union[ALU,FPU,Data_Path]

@@ -3,8 +3,11 @@ import re
 from storage import Storage
 from data_memory import Data_Memory
 from segment_mapper import Segment_Mapper
-from .types import DataSectionInfo, BssSectionInfo, LabelMap, ConstantMap
+from .types import DataSectionInfo, BssSectionInfo, LabelMap, ConstantMap, FU
+from data_path import Data_Path
 from alu import ALU
+from fpu import FPU
+
 
 class Control_Unit:
 
@@ -36,8 +39,9 @@ class Control_Unit:
         # Initialize Control Unit with memory, segment mapper, funtional units and registers (general purpose, fpu and flags)
         self.memory: Data_Memory = memory
         self.loader: Segment_Mapper = loader
+        self.data_path: Data_Path = Data_Path()
         self.alu: ALU = ALU()
-        # self.fpu: FPU = FPU(self)     NOT ACTIVE IN THE CURRENT VERSION
+        self.fpu: FPU = FPU()     
 
         self.registers: dict[str, int] = {
             # General Purpose Registers (64-bit Integers)
@@ -55,7 +59,7 @@ class Control_Unit:
         # Instruction Pointer
         self.rip: int = loader.rip  # Instruction Pointer initialized from Segment Mapper
         # Flag state holders
-        self.flags = {
+        self.flags: dict[str, int] = {
             'ZF': 0,  # Zero Flag
             'SF': 0,  # Sign Flag
             'OF': 0,  # Overflow Flag
@@ -73,7 +77,7 @@ class Control_Unit:
         # Helper instances for the execution
         self.halted: bool = False
         self.finished: bool = False
-        self.current_fu: str = "cpu" # (cpu/alu/fpu)
+        self.current_fu: str = "cpu" # (cpu/data_path/alu/fpu)
         self.current_instruction: str | None = None
         self.op1: str | None = None
         self.op1_size: int = 0  # size must be 0 if self.op1 = None
@@ -109,7 +113,7 @@ class Control_Unit:
             # current_instruction will only be 'None' if rip points to a label in .text (which should be skiped)
             if self.current_instruction != None:
                 # 2. Verifies if the instruction-operand set is valid and triggers the execution of the instruction in the respective funtional unit
-                self.execute()
+                self.execute(self.current_instruction, self.op1_value, self.op1_address, self.op1_type, self.op1_size, self.op2_value, self.op2_address, self.op2_type, self.op2_size, self.flags)
                 # 4. Verifies if the execution generated any type of side effects of flags and halted state and updates them
                 self.validate_execution_state()
                 # 5. Increases rip 
@@ -159,14 +163,25 @@ class Control_Unit:
         else:
             raise ValueError(f"INVALID INSTRUCTION AT LINE {self.rip}!")
     
-    def execute(self) -> None:
+    def execute(self, instruction: str, op1_value: bytes, op1_address: int | None, op1_type: str | None, op1_size: int, op2_value: bytes, op2_address: int | None, op2_type: str | None, op2_size: int, flags: dict[str, int]) -> None:
         """
         Transfers executions to the class with the funtional unit responsible for the instaruction
         in the current instruction in this class's respective instance
         and retrives the result of the operation if any and the flags state that resulted from the operation.
         
         """
-        ...
+        if self.current_fu == "cpu":
+            if self.current_instruction == "syscall":
+                self.syscall()
+            elif self.curretent_instruction == "call":
+                self.call()
+        else:
+            current_fu: FU = self.get_current_fu()
+            current_fu.load_values(instruction, op1_value, op1_address, op1_type, op1_size, op2_value, op2_address, op2_type, op2_size, flags)
+            current_fu.execute()
+            if current_fu.result != b'0':
+                self.set_result(...)
+
     def validate_execution_state(self) -> None:
         """
         Docstring for validate_execution_state
@@ -181,7 +196,8 @@ class Control_Unit:
 
     def is_valid_instruction(self, instruction: str) -> bool:
         """
-        Verifies if a given instruction is supported by the program and if so sets the current funtional unit in use.
+        Verifies if a given instruction is supported by the program and if so sets the current funtional unit in use.\n
+        Enables syscalls and funtion calls methods taken care by this class.
 
         :param instruction: Instruction in verification
         :type instruction: str
@@ -191,6 +207,12 @@ class Control_Unit:
         for funtional_units in self.valid_instructions.keys():
             if instruction in self.valid_instructions[funtional_units]:
                 self.current_fu = funtional_units
+                return True
+            elif instruction == "syscall":
+                self.current_fu = "cpu"
+                return True
+            elif instruction == "call":
+                self.current_fu = "cpu"
                 return True
         return False
     
@@ -732,6 +754,22 @@ class Control_Unit:
             new_value: str = str(value).replace('"', '').replace("'", "")
             byte_value: bytes = str(new_value).encode()
             return int.from_bytes(byte_value, 'little')
+    
+    def get_current_fu(self) -> FU:
+        """
+        Returns the object to the current funtional unit in use
+
+        :return: Funtional unit object at use
+        :rtype: FU (Type Aliase for all funtional unit types)
+        """
+        if self.current_fu == "cpu":
+            return self.data_path
+        elif self.current_fu == "alu":
+            return self.alu
+        elif self.current_fu == "fpu":
+            return self.fpu
+        else:
+            raise ValueError("NO FUNTIONAL UNIT FOUND.\n Exiting program...")
             
     #-------------------------
     # Operand type validation
@@ -976,9 +1014,29 @@ class Control_Unit:
                 raise ValueError(f"INVALID EXPRESSION {expression} IN MEMORY ADDRESSING MODE AT LINE {self.rip}!")
         else:
             return [0,-1]
+        
+    #-------------------------------
+    # SYSCALL'S  AND CALL'S METHODS
+    #-------------------------------
+
+    def syscall(self) -> None:
+        """
+        Reproduces syscall behaviour accordingly to the values of certain registers
+        """
+        # Exit syscall
+        if self.registers['rax'] == 60:
+            print(f"Program finished with exit status {self.registers['rdi']}")
+            sys.exit(0)
+            # Write syscall (could be improved to allow writing into the stdin)
+        elif self.registers['rax'] == 1 and self.registers['rdi'] == 1:
+            for i in range(self.registers['rdx']):
+                print(Data_Memory.read_bytes(self.memory, self.registers['rsi'] + i, 1).decode('utf-8'))
+    
+    def call(self) -> None:
+        pass
     
     # -----------------------
-    # STATIC HELPERS (might be moved onto a different file)
+    # STATIC HELPERS 
     # -----------------------
 
     @staticmethod
