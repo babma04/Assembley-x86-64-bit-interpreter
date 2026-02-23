@@ -1,0 +1,34 @@
+{
+    "valid start": "_start",
+    "data_path": {
+        "mov": 2,
+        "halt": 0,
+        "cmp": 2,
+        "jmp": 1,
+        "jb": 1,
+        "jl": 1,
+        "ja": 1,
+        "jg": 1,
+        "je": 1,
+        "jne": 1,
+        "jz": 1,
+        "js": 1,
+        "jc": 1,
+        "jo": 1
+    },
+    "alu": {
+        "add": 2,
+        "adc": 2,
+        "sub": 2,
+        "sbb": 2,
+        "inc": 1,
+        "dec": 1,
+        "and": 2,
+        "or": 2,
+        "xor": 2,
+        "not": 1,
+        "neg": 1,
+        "xchg": 2
+    },
+    "fpu": {}
+}

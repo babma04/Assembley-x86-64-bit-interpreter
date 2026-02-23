@@ -109,7 +109,11 @@ class Control_Unit:
     def step(self) -> None:
         try:
             # 1. Gets the instruction, operands and funtional unit in use and verifies it's compatibility it the operator count of the instruction
-            self.fetch()
+            if len(self.text_section) > self.rip:
+                self.fetch()
+            else:
+                print("NO VALID EXIT WAS VALID TO THE PROGRAM.\n Forcing program's exit...")
+                sys.exit(100)
             # current_instruction will only be 'None' if rip points to a label in .text (which should be skiped)
             if self.current_instruction != None:
                 # 2. Verifies if the instruction-operand set is valid and triggers the execution of the instruction in the respective funtional unit

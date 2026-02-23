@@ -28,7 +28,7 @@ class Data_Memory:
     def __init__(self, memory_base: int, stack_start: int = 0x7fffffffe000):
         self.start: int= memory_base
         # Memory as an array of 8-bit cells
-        self.memory: bytearray= bytearray(stack_start-memory_base)
+        self.memory: dict[int, bytes] = {}
         # Stack configuration
         self.stack_start: int= stack_start     
         self.stack_pointer: int= stack_start 
@@ -49,7 +49,7 @@ class Data_Memory:
         :rtype: bytes
         """
         addr -= Data_Memory.RODATA_BASE
-        return self.memory[addr:addr + size]
+        return b"".join(self.memory.get(addr + i, b"\x00") for i in range(size))
     
     # Writing structure:
 
@@ -77,7 +77,9 @@ class Data_Memory:
         """
         if not self.valid_data_length(data, size):
             data = self.get_valid_data(data, size)
-        self.memory[addr:addr + size] = data
+        
+        for i, b in enumerate(data):
+            self.memory[addr + i] = b
     
     def valid_data_length(self, data: bytes, size: int) -> bool:
         """

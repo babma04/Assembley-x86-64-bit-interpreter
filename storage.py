@@ -35,7 +35,7 @@ class Storage:
                     continue
             clean_lines.append(line.strip())
             
-        Storage.save_file(file_name, clean_lines)
+        Storage.save_file(new_file_name, clean_lines)
         return new_file_name
         
 

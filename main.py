@@ -17,7 +17,6 @@ def main():
     :example: python main.py /path/to/assembly_file.asm
     :note: Ensure the assembly file exists at the specified path.
     """
-    
     validation_file_name: str = Storage.initialize_instructions()     # Update method to enable more instructionss
     
     file = get_file()
