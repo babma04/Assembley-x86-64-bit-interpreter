@@ -588,7 +588,7 @@ class Control_Unit:
         """
         register = register.lower()
 
-        if register in self.registers.keys():
+        if register.startswith('r') and (register.endswith('x') or register[len(register) - 1].isdigit()):
             return 8
         elif register.startswith('e') or register.endswith('d'):
             return 4

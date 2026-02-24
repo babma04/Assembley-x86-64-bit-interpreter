@@ -2,6 +2,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+// Compilation command: gcc -O3 -shared -o libmmu.so -fPIC memory_eng.c 
+
 // Constants declarations
 #define PAGE_SIZE 4096  // 4kb per page
 #define MAX_PAGES 512 // 512 * 8 bytes per entry = 4kb tables
