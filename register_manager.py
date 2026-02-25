@@ -15,9 +15,6 @@ class X86GeneralReg(ctypes.Union):
         """
         Handles the structure of the low and high bytes for the registers that enable it
         """
-        # Signals no padding padding in between the structure entries
-        _pack_ = 1
-
         _fields_ = [("l", ctypes.c_uint8), ("h", ctypes.c_uint8)]
     _fields_ = [
         ("r64", ctypes.c_uint64),
@@ -26,25 +23,35 @@ class X86GeneralReg(ctypes.Union):
         ("r8", _R8)
     ]
 
+class ComplexReg(ctypes.Structure):
+    """8 bytes data + 1 byte flag + 7 bytes padding = 16 bytes entire structure"""
+    _fields_ = [
+        ("reg", X86GeneralReg),
+        ("is_signed", ctypes.c_uint8),
+        ("padding", ctypes.c_uint8 * 7) 
+    ]
+
+class Standard64Reg(ctypes.Structure):
+    """8 bytes data + 1 byte flag + 7 bytes padding = 16 bytes entire structure"""
+    _fields_ = [
+        ("r64", ctypes.c_uint64),
+        ("is_signed", ctypes.c_uint8),
+        ("padding", ctypes.c_uint8 * 7)
+    ]
+
 class CPURegsStruct(ctypes.Structure):
     """
-    The exact memory layout of your registers.c struct
+    Memory layout of your registers.c struct
     """
-    # Signals no padding in between values
-    _pack_ = 1
-    # Defines the structure fields and attributes them to a tuple key at the order they appear in memory
     _fields_ = [
-        # high byte accessible
-        ("rax", X86GeneralReg), ("rbx", X86GeneralReg),
-        ("rcx", X86GeneralReg), ("rdx", X86GeneralReg),
-        # Standard registers
-        ("rsi", ctypes.c_uint64), ("rdi", ctypes.c_uint64),
-        ("rbp", ctypes.c_uint64), ("rsp", ctypes.c_uint64),
-        ("r8", ctypes.c_uint64),  ("r9", ctypes.c_uint64),
-        ("r10", ctypes.c_uint64), ("r11", ctypes.c_uint64),
-        ("r12", ctypes.c_uint64), ("r13", ctypes.c_uint64),
-        ("r14", ctypes.c_uint64), ("r15", ctypes.c_uint64),
-        # Flags register
+        ("rax", ComplexReg), ("rbx", ComplexReg),
+        ("rcx", ComplexReg), ("rdx", ComplexReg),
+        ("rsi", Standard64Reg), ("rdi", Standard64Reg),
+        ("rbp", Standard64Reg), ("rsp", Standard64Reg),
+        ("r8", Standard64Reg),  ("r9", Standard64Reg),
+        ("r10", Standard64Reg), ("r11", Standard64Reg),
+        ("r12", Standard64Reg), ("r13", Standard64Reg),
+        ("r14", Standard64Reg), ("r15", Standard64Reg),
         ("rflags", ctypes.c_uint32)
     ]
 
@@ -61,6 +68,7 @@ class Registers_Interface:
     def __init__(self, lib_path: str="./libreg.so"):
         # Load the library compiled on your Vivobook
         self.lib = ctypes.CDLL(os.path.abspath(lib_path))
+
         # Define C return and args types
         self.lib.write_reg.argtypes = [
             ctypes.c_int,    # reg_id
@@ -68,6 +76,10 @@ class Registers_Interface:
             ctypes.c_int,    # size
             ctypes.c_int     # is_high
         ]
+
+        self.lib.set_reg_sign.argtypes = [ctypes.c_int, ctypes.c_uint8]
+        self.lib.is_signed.restype = ctypes.c_int
+
         self.lib.get_cpu_state.restype = ctypes.POINTER(CPURegsStruct)
         self.lib.read_8b_reg.restype = ctypes.c_int64
         self.lib.read_4b_reg.restype = ctypes.c_int32
@@ -76,7 +88,7 @@ class Registers_Interface:
         # Parent registers mapping to ghet indexes
         self.regs_map: list[str] = ["rax", "rbx", "rcx", "rdx", "rsi", "rdi", "rbp", "rsp", "r8", "r9", "r10", "r11", "r12", "r13", "r14", "r15"]
 
-    def write_reg(self, expression: str, value: int) -> None:
+    def write_reg(self, expression: str, value: int, signed: bool = False) -> None:
         """
         Writes to the register holder in the c file structure of registers.\n
         (Re)Writes the given register with the given size if both are valid.
@@ -86,6 +98,8 @@ class Registers_Interface:
         :type expression: str
         :param value: Value to write the register with
         :type value: int
+        :param signed: Flag that signals if the value is signed or not
+        :type signed: bool
         :raises ValueError: If either the expression is not a register name or the value is too big for the register
         """
         reg_info: tuple[str,int] = self.get_register_parent(expression)
@@ -102,7 +116,9 @@ class Registers_Interface:
             reg_id = next((i for i, key in enumerate(self.regs_map) if key == reg_info[0]), -1)
         except StopIteration:
             raise ValueError(f"RERGISTER {expression} DOES NOT EXIST.")
+        
         self.lib.write_reg(reg_id, value, reg_size, self.is_high(expression))
+        self.lib.set_reg_sign(reg_id, 1 if signed else 0)
     
     def read_reg(self, expression: str) -> int:
         """
@@ -118,11 +134,20 @@ class Registers_Interface:
         reg_info: tuple[str,int] = self.get_register_parent(expression)
         reg_id: int = -1
         reg_size: int = reg_info[1]
+        
         try:
             reg_id = next((i for i, key in enumerate(self.regs_map) if key == reg_info[0]), -1)
         except StopIteration:
             raise ValueError(f"RERGISTER {expression} DOES NOT EXIST.")
-        return self.match_read(reg_id, reg_size, self.is_high(expression))
+        
+        value: int =  self.match_read(reg_id, reg_size, self.is_high(expression))
+
+        if self.lib.is_signed(reg_id) == 1:
+            bits: int = reg_size * 8            
+            # Manual 2's complement conversion
+            if value & (1 << (bits - 1)):
+                value -= (1 << bits)
+        return value
 
     def get_register_parent(self, expression: str) -> tuple[str,int]:
         """
