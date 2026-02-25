@@ -1,9 +1,7 @@
 import ctypes
 import os
 
-
-# !!! TO BE REVISED !!!
-
+# NEEDS POINTER REVISIONS
 
 #--------------------
 # C Register Mapping
@@ -36,14 +34,17 @@ class CPURegsStruct(ctypes.Structure):
     _pack_ = 1
     # Defines the structure fields and attributes them to a tuple key at the order they appear in memory
     _fields_ = [
+        # high byte accessible
         ("rax", X86GeneralReg), ("rbx", X86GeneralReg),
         ("rcx", X86GeneralReg), ("rdx", X86GeneralReg),
+        # Standard registers
         ("rsi", ctypes.c_uint64), ("rdi", ctypes.c_uint64),
         ("rbp", ctypes.c_uint64), ("rsp", ctypes.c_uint64),
         ("r8", ctypes.c_uint64),  ("r9", ctypes.c_uint64),
         ("r10", ctypes.c_uint64), ("r11", ctypes.c_uint64),
         ("r12", ctypes.c_uint64), ("r13", ctypes.c_uint64),
         ("r14", ctypes.c_uint64), ("r15", ctypes.c_uint64),
+        # Flags register
         ("rflags", ctypes.c_uint32)
     ]
 
@@ -53,33 +54,75 @@ class CPURegsStruct(ctypes.Structure):
 
 class Registers_Interface:
 
-    MASKS_DIRECTIVES = {
-        'byte': 0xFF, 'word': 0xFFFF, 'dword': 0xFFFFFFFF, 'qword': 0xFFFFFFFFFFFFFFFF
+    SIZE_DIRECTIVES = {
+        'byte': 1, 'word': 2, 'dword': 4, 'qword': 8
     }
 
     def __init__(self, lib_path: str="./libreg.so"):
         # Load the library compiled on your Vivobook
         self.lib = ctypes.CDLL(os.path.abspath(lib_path))
-        # Define C return types
+        # Define C return and args types
+        self.lib.write_reg.argtypes = [
+            ctypes.c_int,    # reg_id
+            ctypes.c_int64,  # value (Signed 64-bit)
+            ctypes.c_int,    # size
+            ctypes.c_int     # is_high
+        ]
         self.lib.get_cpu_state.restype = ctypes.POINTER(CPURegsStruct)
-        self.lib.read_8b_reg.restype = ctypes.c_uint64
-        self.lib.read_4b_reg.restype = ctypes.c_uint32
-        self.lib.read_2b_reg.restype = ctypes.c_uint16
-        self.lib.read_1b_reg.restype = ctypes.c_uint8
+        self.lib.read_8b_reg.restype = ctypes.c_int64
+        self.lib.read_4b_reg.restype = ctypes.c_int32
+        self.lib.read_2b_reg.restype = ctypes.c_int16
+        self.lib.read_1b_reg.restype = ctypes.c_int8
+        # Parent registers mapping to ghet indexes
+        self.regs_map: list[str] = ["rax", "rbx", "rcx", "rdx", "rsi", "rdi", "rbp", "rsp", "r8", "r9", "r10", "r11", "r12", "r13", "r14", "r15"]
 
-        self.state = self.lib.get_cpu_state().contents
-        self.regs_map = {"rax", "rbx", "rcx", "rdx", "rsi", "rdi", "rbp", "rsp", "r8", "r9", "r10", "r11", "r12", "r13", "r14", "r15"}
+    def write_reg(self, expression: str, value: int) -> None:
+        """
+        Writes to the register holder in the c file structure of registers.\n
+        (Re)Writes the given register with the given size if both are valid.
+        Raises ValueError if any are not valid.
+
+        :param expression: Name of the register to write to
+        :type expression: str
+        :param value: Value to write the register with
+        :type value: int
+        :raises ValueError: If either the expression is not a register name or the value is too big for the register
+        """
+        reg_info: tuple[str,int] = self.get_register_parent(expression)
+        reg_id: int = -1
+        reg_size: int = reg_info[1]
+
+        bits: int = reg_size * 8
+        min_signed_val: int = -(2**(bits - 1))
+        max_unsigned_val: int = (2**(bits - 1))
+
+        if value < min_signed_val or value > max_unsigned_val:
+            raise ValueError(f"INVALID VALUE {value} TO ATTRIBUTE TO {expression}. OVERFLOW DETECTED.")
+        try:
+            reg_id = next((i for i, key in enumerate(self.regs_map) if key == reg_info[0]), -1)
+        except StopIteration:
+            raise ValueError(f"RERGISTER {expression} DOES NOT EXIST.")
+        self.lib.write_reg(reg_id, value, reg_size, self.is_high(expression))
     
-    def read_reg(self, expression: str) -> bytes:
+    def read_reg(self, expression: str) -> int:
+        """
+        Returns the value of the given register in the c structure file.
+        Raises ValueError if the register given is not found.
+        
+        :param expression: Name of the register to read
+        :type expression: str
+        :return: Value of the given register
+        :rtype: int
+        :raises ValueError: If a non existante expression is passed to the execution
+        """
         reg_info: tuple[str,int] = self.get_register_parent(expression)
         reg_id: int = -1
         reg_size: int = reg_info[1]
         try:
-            reg_id = next((i for i, key in enumerate(reg_info) if key == expression), -1)
+            reg_id = next((i for i, key in enumerate(self.regs_map) if key == reg_info[0]), -1)
         except StopIteration:
             raise ValueError(f"RERGISTER {expression} DOES NOT EXIST.")
-        value: bytes = self.match_read(reg_id, reg_size, self.is_high(expression))
-
+        return self.match_read(reg_id, reg_size, self.is_high(expression))
 
     def get_register_parent(self, expression: str) -> tuple[str,int]:
         """
@@ -87,7 +130,7 @@ class Registers_Interface:
         
         :param expression: sub 64-bit register (has a falback option if a 64-bit register is passed)
         :type expression: str
-        :return: Tuple containing the parent register and the mask to the given register
+        :return: Tuple containing the parent register and the size of the given register
         :rtype: tuple[str, int]
         """
         reg = expression.lower()
@@ -95,25 +138,20 @@ class Registers_Interface:
         # 32-bit: eax -> rax, r8d -> r8
         if reg.startswith('e') or reg.endswith('d'):
             parent = reg.replace('e', 'r', 1) if reg.startswith('e') else reg[:-1]
-            return parent, self.MASKS_DIRECTIVES['dword']
+            return parent, self.SIZE_DIRECTIVES['dword']
 
         # 16-bit: ax -> rax, r8w -> r8
         if (len(reg) == 2 and reg.endswith('x')) or reg.endswith('w'):
              parent = 'r' + reg if reg.endswith('x') else reg[:-1]
-             return parent, self.MASKS_DIRECTIVES['word']
+             return parent, self.SIZE_DIRECTIVES['word']
 
-        # 8-bit Low: al -> rax, r8b -> r8
-        if reg.endswith('l') or reg.endswith('b'):
+        # 8-bit: al -> rax, r8b -> r8
+        if reg.endswith('l') or reg.endswith('h') or reg.endswith('b'):
             parent = 'r' + reg[:-1] + 'x' if len(reg) == 2 else reg[:-1]
-            return parent, self.MASKS_DIRECTIVES['byte']
-        
-        # 8-bit High: ah -> rax
-        if reg.endswith('h') and len(reg) == 2:
-            parent = 'r' + reg[0] + 'x'
-            return parent, 0xFF00
+            return parent, self.SIZE_DIRECTIVES['byte']
 
         # Fallback for 64-bit
-        return reg, self.MASKS_DIRECTIVES['qword']
+        return reg, self.SIZE_DIRECTIVES['qword']
     
     def is_high(self, expression:str ) -> int:
         """
@@ -128,7 +166,7 @@ class Registers_Interface:
             return 1
         return 0
     
-    def match_read(self, reg_id: int, size: int, is_high: int) -> bytes:
+    def match_read(self, reg_id: int, size: int, is_high: int) -> int:
         """
         Directs execution to the correct read funtion in c according to the specified size.
 
@@ -138,10 +176,12 @@ class Registers_Interface:
         :type size: int
         :param is_high: Flag to signal if the register is the second byte of a parent register (1 - yes; 0 - no)
         :type is_high: int
-        :return: bytes of that register
-        :rtype: bytes
+        :return: value of that register
+        :rtype: int
         """
         if size == 8: return self.lib.read_8b_reg(reg_id)
-        if size == 4: return self.lib.read_4b_reg(reg_id)
-        if size == 2: return self.lib.read_2b_reg(reg_id)
-        if size == 1: return self.lib.read_1b_reg(reg_id, is_high)
+        elif size == 4: return self.lib.read_4b_reg(reg_id)
+        elif size == 2: return self.lib.read_2b_reg(reg_id)
+        else: return self.lib.read_1b_reg(reg_id, is_high)
+        
+        

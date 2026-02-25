@@ -1,4 +1,5 @@
 #include <stdint.h>
+#include <stddef.h>
 
 // Compilation command: gcc -O3 -shared -o libreg.so -fPIC registers.c
 
@@ -11,19 +12,25 @@ typedef union{
         uint8_t l;
         uint8_t h;
     } r8;
-} x86_general_registers;
+}x86_aliased_registers;
+
+typedef struct {
+    x86_aliased_registers reg;
+    uint8_t is_signed; // 0 = unsingned, 1 = signed
+}x86_general_register_complex;
+
+typedef struct {
+    uint64_t r64;
+    uint8_t is_signed;
+}x86_64bit_standard_register;
 
 // Defines the general registers as a structure of the CPU as well as the flags register
-typedef struct{
-    x86_general_registers rax;
-    x86_general_registers rbx;
-    x86_general_registers rcx;
-    x86_general_registers rdx;
-
-    uint64_t rsi, rdi, rbp, rsp;
-    uint64_t r8, r9, r10, r11, r12, r13, r14, r15;
-    uint32_t rflags;
-} CPURegs;
+typedef struct {
+    x86_general_register_complex rax, rbx, rcx, rdx;
+    x86_64bit_standard_register rsi, rdi, rbp, rsp;
+    x86_64bit_standard_register r8, r9, r10, r11, r12, r13, r14, r15;
+    uint32_t rflags; 
+}CPURegs;
 
 // Missing FPU register structure
 
@@ -39,112 +46,117 @@ CPURegs *get_cpu_state()
     return &current_state;
 }
 
+//-------------------------
+// Pointers dispatcher
+//-------------------------
+
+/**
+ * Helper for getting the pointer to a given register.
+ * Returns the pointer to the start of the structure that holds the desired register given by its index.
+ * @param reg_id Index of the desired register as in the CPURegs structure
+ */
+static x86_aliased_registers* get_reg_ptr(int reg_id)
+{
+    switch(reg_id) {
+        case 0: return &current_state.rax.reg;
+        case 1: return &current_state.rbx.reg;
+        case 2: return &current_state.rcx.reg;
+        case 3: return &current_state.rdx.reg;
+        // For standard regs, we cast them to the aliased union type 
+        // so the write_reg logic works for all of them
+        case 4: return (x86_aliased_registers*)&current_state.rsi;
+        case 5: return (x86_aliased_registers*)&current_state.rdi;
+        case 6: return (x86_aliased_registers*)&current_state.rbp;
+        case 7: return (x86_aliased_registers*)&current_state.rsp;
+        case 8: return (x86_aliased_registers*)&current_state.r8;
+        case 9: return (x86_aliased_registers*)&current_state.r9;
+        case 10: return (x86_aliased_registers*)&current_state.r10;
+        case 11: return (x86_aliased_registers*)&current_state.r11;
+        case 12: return (x86_aliased_registers*)&current_state.r12;
+        case 13: return (x86_aliased_registers*)&current_state.r13;
+        case 14: return (x86_aliased_registers*)&current_state.r14;
+        case 15: return (x86_aliased_registers*)&current_state.r15;
+        default: return NULL;
+    }
+}
+
+//-------------------------
+// Signing related funtions
+//-------------------------
+
+/**
+ * Sets the sign flag for a register
+ * @param reg_id Index of the register in as defined by the order of initialization in the CPURegs struct
+ * @param is_signed 0 = unsigned , 1 = signed
+ */
+void set_reg_sign(int reg_id, uint8_t is_signed)
+{
+    if (reg_id < 0 || reg_id > 15) return;
+    uint8_t *base = (uint8_t*)get_reg_ptr(reg_id);
+    *(base + 8) = is_signed;
+}
+
+/**
+ * Returns the value of the sign status of a given register. If the given index is incorrect returns -1
+ * @param reg_id Index of the register in as defined by the order of initialization in the CPURegs struct
+ */
+int is_signed(int reg_id)
+{
+    if (reg_id < 0 || reg_id > 15) return -1;
+    uint8_t *base = (uint8_t*)get_reg_ptr(reg_id);
+    return *(base + 8);
+}
+
+//-------------------------
+// Write related funtions
+//-------------------------
+
 /**
  * write_reg: Hardware Dispatcher for register values.
- * @param reg_id: Index of the register in as defined by the order of initialization in the CPURegs struct
- * @param value:  The 64-bit value to write
- * @param size:   Number of bytes to write (1, 2, 4, 8)
+ * @param reg_id Index of the register in as defined by the order of initialization in the CPURegs struct
+ * @param value  The 64-bit value to write
+ * @param size   Number of bytes to write (1, 2, 4, 8)
  * @param is_high: Boolean (1 if accessing AH/BH/CH/DH)
  */
-void write_reg(int reg_id, uint64_t value, int size, int is_high)
+void write_reg(int reg_id, int64_t value, int size, int is_high)
 {
     if (reg_id < 0 | reg_id > 15) return;
 
     // Pointer to the start of the register array for the first structure
-    x86_general_registers *gpr = (x86_general_registers*)&current_state;
-
+    x86_aliased_registers *target = get_reg_ptr(reg_id);
+    if (!target) return;
     // Handle the first 4 registers (RAX, RCX, RDX, RBX) which support splitting
-    if (reg_id < 4)
+    if (size == 8) target->r64 = value;
+    else if (size == 4) target->e32 = (uint32_t)value;
+    else if (size == 2) target->x16 = (uint16_t)value;
+    else if (size == 1)
     {
-        if (size == 8)
-        {
-            gpr[reg_id].r64 = value;
-        } else if (size == 4)
-        {
-            gpr[reg_id].r64 = (uint32_t) value; 
-        } else if (size == 2)
-        {
-            gpr[reg_id].x16 = (uint16_t) value;
-        } else if (size == 1)
-        {
-            if (is_high) gpr[reg_id].r8.h = (uint8_t) value;
-            else         gpr[reg_id].r8.l = (uint8_t) value;
-        }
-    } 
-    // Handle the remaining registers (RSI through R15)
-    else if (reg_id < 16) {
-        uint64_t *gpr2 = (uint64_t*) &current_state;
-        if (size == 8)
-        {
-            gpr2[reg_id] = value;
-        } else if (size == 4)
-        {
-            gpr2[reg_id] = (uint32_t) value;
-        } else if (size == 2)
-        {
-            gpr2[reg_id] = (uint16_t) value;
-        } else if (size == 1)
-        {
-            gpr2[reg_id] = (uint8_t) value;
-        }
+        if (is_high && reg_id < 4) target->r8.h = (uint8_t)value;
+        else target->r8.l = (uint8_t)value;
     }
 }
 
+//-------------------------
+// Read related funtions
+//-------------------------
 
-
-uint64_t read_8b_reg(int reg_id)
-{
-    if (reg_id < 4)
-    {
-        // Pointer to the start of the register array for the first structure
-        x86_general_registers *gpr = (x86_general_registers*) &current_state;
-        return gpr[reg_id].r64;
-    } else
-    {
-        uint64_t *gpr2 = (uint64_t*) &current_state;
-        return gpr2[reg_id];
-    }
+uint64_t read_8b_reg(int reg_id) {
+    x86_aliased_registers *target = get_reg_ptr(reg_id);
+    return target->r64;
 }
 
-uint32_t read_4b_reg(int reg_id)
-{
-    if (reg_id < 4)
-    {
-        // Pointer to the start of the register array for the first structure
-        x86_general_registers *gpr = (x86_general_registers*) &current_state;
-        return (uint32_t) gpr[reg_id].e32;
-    } else
-    {
-        uint64_t *gpr2 = (uint64_t*) &current_state;
-        return (uint32_t) gpr2[reg_id];
-    }
+uint32_t read_4b_reg(int reg_id) {
+    x86_aliased_registers *target = get_reg_ptr(reg_id);
+    return target->e32;
 }
 
-uint16_t read_2b_reg(int reg_id)
-{
-    if (reg_id < 4)
-    {
-        // Pointer to the start of the register array for the first structure
-        x86_general_registers *gpr = (x86_general_registers*) &current_state;
-        return (uint16_t) gpr[reg_id].x16;
-    } else
-    {
-        uint64_t *gpr2 = (uint64_t*) &current_state;
-        return (uint16_t) gpr2[reg_id];
-    }
+uint16_t read_2b_reg(int reg_id) {
+    x86_aliased_registers *target = get_reg_ptr(reg_id);
+    return target->x16;
 }
 
-uint8_t read_1b_reg(int reg_id, int is_high)
-{
-    if (reg_id < 4)
-    {
-        // Pointer to the start of the register array for the first structure
-        x86_general_registers *gpr = (x86_general_registers*) &current_state;
-        if (is_high) return (uint8_t) gpr[reg_id].r8.h;
-        else return (uint8_t) (uint8_t) gpr[reg_id].r8.l;
-    } else
-    {
-        uint64_t *gpr2 = (uint64_t*) &current_state;
-        return (uint8_t) gpr2[reg_id];
-    }
+uint8_t read_1b_reg(int reg_id, int is_high) {
+    x86_aliased_registers *target = get_reg_ptr(reg_id);
+    if (is_high && reg_id < 4) return target->r8.h;
+    return target->r8.l;
 }
