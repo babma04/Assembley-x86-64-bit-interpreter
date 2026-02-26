@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-// Compilation: 
+// Compilation: gcc -O3 -shared -o libops.so -fPIC operations.c
 
 
 // Structure for each operand's necessary info
@@ -19,6 +19,7 @@ typedef struct{
     char *instruction;
     Operand op1;
     Operand op2;
+    Operand result;
 } Info;
 
 Info current_instruction_state = {0};
@@ -39,7 +40,7 @@ Info current_instruction_state = {0};
  */
 void get_operand_info(char *operand, int address, int value, int size, char *type)
 {
-    if (strcmp(*operand, "op1") == 0 )
+    if (strcmp(operand, "op1") == 0 )
     {
         current_instruction_state.op1.address = address;
         current_instruction_state.op1.value = value;
@@ -70,4 +71,3 @@ void clean()
 {
     memset(&current_instruction_state, 0, sizeof(Info));
 }
-
