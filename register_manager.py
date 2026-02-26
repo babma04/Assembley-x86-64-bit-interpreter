@@ -160,7 +160,7 @@ class Registers_Interface:
 
     def get_register_parent(self, expression: str) -> tuple[str,int]:
         """
-        Maps the sub-registers to its 64-bit parent and returns it with the mask require to obtain its value
+        Maps the sub-registers to its 64-bit parent and returns it with the mask require to obtain its value.
         
         :param expression: sub 64-bit register (has a falback option if a 64-bit register is passed)
         :type expression: str
