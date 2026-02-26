@@ -88,6 +88,11 @@ class Registers_Interface:
         # Parent registers mapping to ghet indexes
         self.regs_map: list[str] = ["rax", "rbx", "rcx", "rdx", "rsi", "rdi", "rbp", "rsp", "r8", "r9", "r10", "r11", "r12", "r13", "r14", "r15"]
 
+
+    #-------------------
+    # Register Writing
+    #-------------------
+
     def write_reg(self, expression: str, value: int, signed: bool = False) -> None:
         """
         Writes to the register holder in the c file structure of registers.\n
@@ -119,7 +124,11 @@ class Registers_Interface:
         
         self.lib.write_reg(reg_id, value, reg_size, self.is_high(expression))
         self.lib.set_reg_sign(reg_id, 1 if signed else 0)
-    
+
+    #-------------------
+    # Register Reading
+    #-------------------
+
     def read_reg(self, expression: str) -> int:
         """
         Returns the value of the given register in the c structure file.
