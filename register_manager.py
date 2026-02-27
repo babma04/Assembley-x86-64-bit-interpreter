@@ -66,7 +66,7 @@ class Registers_Interface:
     }
 
     def __init__(self, lib_path: str="./libreg.so"):
-        # Load the library compiled on your Vivobook
+        # Load the library compiled s
         self.lib = ctypes.CDLL(os.path.abspath(lib_path))
 
         # Define C return and args types
@@ -169,17 +169,17 @@ class Registers_Interface:
         """
         reg = expression.lower()
         
-        # 32-bit: eax -> rax, r8d -> r8
+        # 32-bit
         if reg.startswith('e') or reg.endswith('d'):
             parent = reg.replace('e', 'r', 1) if reg.startswith('e') else reg[:-1]
             return parent, self.SIZE_DIRECTIVES['dword']
 
-        # 16-bit: ax -> rax, r8w -> r8
+        # 16-bit
         if (len(reg) == 2 and reg.endswith('x')) or reg.endswith('w'):
              parent = 'r' + reg if reg.endswith('x') else reg[:-1]
              return parent, self.SIZE_DIRECTIVES['word']
 
-        # 8-bit: al -> rax, r8b -> r8
+        # 8-bit
         if reg.endswith('l') or reg.endswith('h') or reg.endswith('b'):
             parent = 'r' + reg[:-1] + 'x' if len(reg) == 2 else reg[:-1]
             return parent, self.SIZE_DIRECTIVES['byte']

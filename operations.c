@@ -12,27 +12,34 @@ typedef struct{
     int value;
     int size; // 1,2,4,8
     char *op_type;
-    char *write_type; //(str, int, ...)
-} ALU_Operand;
+} Operand;
 
 // To be implemented a fpu operand struct
 
 // Structure for all necessaryu instruction info
 typedef struct{
     char *instruction;
-    ALU_Operand op1;
-    ALU_Operand op2;
-    ALU_Operand result;
+    Operand op1;
+    Operand op2;
+    Operand result;
 } Info;
 Info current_instruction_state = {0};
 
+/**
+ * Gets the pointer to the structure with the instruction info
+ */
+Info *get_current_state()
+{
+    return &current_instruction_state;
+}
+
 // Prototypes
 // Operand management prototypes
-void get_operand_info(char *operand, int address, int value, int size, char *op_type, char *write_type);
+void get_operand_info(char *operand, int address, int value, int size, char *op_type);
 void set_instruction(char *instruction);
 void clean();
 // Instruction dispatching prototypes
-void dispatch(Info *current_state);
+void dispatch();
 // Data Path funtions prototypes
 void exec_mov(Info *s);
 void exec_halt(Info *s);
@@ -104,9 +111,8 @@ InstructionMap dispatch_table[] = {
  * @param value Value of the given operand
  * @param size Number of bytes that the operand take
  * @param type Address for the sequence of characters that define the data type of this operands value
- * 
  */
-void get_operand_info(char *operand, int address, int value, int size, char *op_type, char *write_type)
+void get_operand_info(char *operand, int address, int value, int size, char *op_type)
 {
     if (operand != NULL && strcmp(operand, "op1") == 0 )
     {
@@ -114,14 +120,12 @@ void get_operand_info(char *operand, int address, int value, int size, char *op_
         current_instruction_state.op1.value = value;
         current_instruction_state.op1.size = size;
         current_instruction_state.op1.op_type = op_type;
-        current_instruction_state.op1.write_type = write_type;
     } else
     {
         current_instruction_state.op2.address = address;
         current_instruction_state.op2.value = value;
         current_instruction_state.op2.size = size;
         current_instruction_state.op1.op_type = op_type;
-        current_instruction_state.op2.write_type = write_type;
     }
 }
 
@@ -149,9 +153,10 @@ void clean()
 /**
  * Instruction dispatcher using the lookup table in InstructionMap.
  * Calls the funtion associated to the instruction string.
- * @param current_state Holder of the current instruction and operand info.
  */
-void dispatch(Info *current_state) {
+void dispatch()
+{
+    Info *current_state = (Info*) get_current_state();
     if (!current_state->instruction) return;
     
     for (int i = 0; i < TABLE_SIZE; i++) {

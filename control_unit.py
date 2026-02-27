@@ -2,6 +2,7 @@ import sys
 import re
 from storage import Storage
 from data_memory import Data_Memory
+from register_manager import Registers_Interface
 from segment_mapper import Segment_Mapper
 from my_types import DataSectionInfo, BssSectionInfo, LabelMap, ConstantMap, FU
 from data_path import Data_Path
@@ -43,13 +44,7 @@ class Control_Unit:
         self.alu: ALU = ALU()
         self.fpu: FPU = FPU()     
 
-        self.registers: dict[str, int] = {
-            # General Purpose Registers (64-bit Integers)
-            "rax": 0, "rbx": 0, "rcx": 0, "rdx": 0,
-            "rsi": 0, "rdi": 0, "rbp": 0, "rsp": loader.stack_pointer,
-            "r8": 0,  "r9": 0,  "r10": 0, "r11": 0,
-            "r12": 0, "r13": 0, "r14": 0, "r15": 0
-        }
+        self.registers: Registers_Interface = Registers_Interface()
 
         # xmm registers are treated as the lower 16 bytes of each respective ymm register
         self.ymm: dict[str, bytearray] = {
@@ -468,7 +463,7 @@ class Control_Unit:
                 # should never happen
                 raise ValueError(f"INVALID ADDRESS OPERAND {operand} AT LINE {self.rip}!")
         elif operand_type == 'register':
-            value = self.get_register_value(operand).to_bytes(operand_size, byteorder="little")
+            value = self.registers.read_reg(operand).to_bytes(operand_size, byteorder="little")
         elif operand_type == 'constant':
             value  = self.get_encoded_value(self.constants[operand]['value']).to_bytes(operation_size, byteorder="little")
         elif operand_type == 'immediate':
@@ -682,65 +677,6 @@ class Control_Unit:
             print(f"INVALID EXPRESSION {expression} IN MEMORY ADDRESSING MODE AT LINE {self.rip}!")
             sys.exit(...)   # To be determined
         return ret
-    
-    def get_register_value(self, expression: str) -> int:
-        """
-        Returns a register value based on the expression given and it's parent value defined as a class instance
-
-        :param expression: Register to obtain the value of
-        :type expression: str
-        :return: Integer value of that register
-        :rtype: int
-        :raises KeyError: If the obtained parent register is not defined in this classes instances
-        """
-        if expression in self.registers.keys():
-            return self.registers[expression]
-        parent, mask = self.get_register_parent(expression)
-        
-        if parent not in self.registers:
-            raise KeyError(f"Unknown register: {expression}")
-
-        raw_val: int = self.registers[parent] & mask
-        
-        # Shift high-bytes down to the 0-255 range
-        if expression.lower().endswith('h') and len(expression) == 2:
-            return raw_val >> 8
-            
-        return raw_val
-
-    def get_register_parent(self, expression: str) -> tuple[str, int]:
-        """
-        Maps the sub-registers to its 64-bit parent and returns it with the mask require to obtain its value
-        
-        :param expression: sub 64-bit register (has a falback option if a 64-bit register is passed)
-        :type expression: str
-        :return: Tuple containing the parent register and the mask to the given register
-        :rtype: tuple[str, int]
-        """
-        reg = expression.lower()
-        
-        # 32-bit: eax -> rax, r8d -> r8
-        if reg.startswith('e') or reg.endswith('d'):
-            parent = reg.replace('e', 'r', 1) if reg.startswith('e') else reg[:-1]
-            return parent, self.MASKS_DIRECTIVES['dword']
-
-        # 16-bit: ax -> rax, r8w -> r8
-        if (len(reg) == 2 and reg.endswith('x')) or reg.endswith('w'):
-             parent = 'r' + reg if reg.endswith('x') else reg[:-1]
-             return parent, self.MASKS_DIRECTIVES['word']
-
-        # 8-bit Low: al -> rax, r8b -> r8
-        if reg.endswith('l') or reg.endswith('b'):
-            parent = 'r' + reg[:-1] + 'x' if len(reg) == 2 else reg[:-1]
-            return parent, self.MASKS_DIRECTIVES['byte']
-        
-        # 8-bit High: ah -> rax
-        if reg.endswith('h') and len(reg) == 2:
-            parent = 'r' + reg[0] + 'x'
-            return parent, 0xFF00
-
-        # Fallback for 64-bit
-        return reg, self.MASKS_DIRECTIVES['qword']
 
     def get_encoded_value(self, value: str | int) -> int:
         """
@@ -965,7 +901,7 @@ class Control_Unit:
 
         for element in components:
             if re.match(self.GENERAL_PURPOSE_REGISTERS_PATTERN, element):
-                register_value: str = str(self.get_register_value(element))
+                register_value: str = str(self.registers.read_reg(element))
                 ret.append(register_value)
             elif re.match(self.FPU_REGISTERS_PATTERN, element):
                 ### NOT CURRENTLY ACTIVE
@@ -1027,16 +963,23 @@ class Control_Unit:
         """
         Reproduces syscall behaviour accordingly to the values of certain registers
         """
+        rax: int = self.registers.read_reg("rax")
+        rdi: int = self.registers.read_reg("rdi")
+        rdx: int = self.registers.read_reg("rdx")
+        rsi: int = self.registers.read_reg("rsi")
         # Exit syscall
-        if self.registers['rax'] == 60:
-            print(f"Program finished with exit status {self.registers['rdi']}")
+        if rax == 60:
+            print(f"Program finished with exit status {rdi}")
             sys.exit(0)
-            # Write syscall (could be improved to allow writing into the stdin)
-        elif self.registers['rax'] == 1 and self.registers['rdi'] == 1:
-            for i in range(self.registers['rdx']):
-                print(Data_Memory.read_bytes(self.memory, self.registers['rsi'] + i, 1).decode('utf-8'))
+        # Write syscall (could be improved to allow writing into the stdin)
+        elif rax == 1 and rdi == 1:
+            for i in range(rdx):
+                print(Data_Memory.read_bytes(self.memory, rsi + i, 1).decode('utf-8'))
     
     def call(self) -> None:
+        """
+        To implement
+        """
         pass
     
     # -----------------------
