@@ -1,6 +1,9 @@
 import ctypes
 import os
 
+# NEEDS TO RECEIVE INTS NOT BYTES
+
+
 class Data_Memory:
     """
     Simulates the full system memory with:

@@ -22,16 +22,19 @@ class ALU:
     
     """
 
-    def __init__(self, lib_path: str="./libops.so"):
-        self.lib = ctypes.CDLL(os.path.abspath(lib_path))
+    def __init__(self, libops_path: str="./libops.so") -> None:
+        self.libops = ctypes.CDLL(os.path.abspath(libops_path))
+        
 
-        self.lib.get_operand_info.argtypes = [
+        # Define C return and args types
+        self.libops.get_operand_info.argtypes = [
             ctypes.c_char_p, ctypes.c_int, ctypes.c_int64, 
             ctypes.c_int, ctypes.c_char_p
         ]
-        self.lib.set_instruction.argtypes = [ctypes.c_char_p]
-        self.lib.clean.argtypes = []
-    
+        self.libops.set_instruction.argtypes = [ctypes.c_char_p]
+        self.libops.clean.argtypes = []
+        self.libops.dispatch.argtypes = []
+        
     def load_values(self, instruction: str, op1_value: int, op1_address: int | None, op1_type: str | None, op1_size: int, op2_value: int, op2_address: int | None, op2_type: str | None, op2_size: int, flags: dict[str, int]) -> None:
         """
         Initializes the c structure in operations.c
@@ -57,12 +60,12 @@ class ALU:
         :param flags: Current state of the program flags
         :type flags: dict[str, int]
         """
-        self.lib.set_instruction(instruction)
+        self.libops.set_instruction(instruction)
         if op1_type != None:
-            self.lib.get_operand_info("op1", op1_address, op1_value, op1_size, op1_type)
+            self.libops.get_operand_info("op1", op1_address, op1_value, op1_size, op1_type)
         if op2_type != None:
-            self.lib.get_operand_info("op2", op2_address, op2_value, op2_size, op2_type)
+            self.libops.get_operand_info("op2", op2_address, op2_value, op2_size, op2_type)
     
     def execute(self):
-        self.lib.dispatch()
+        self.libops.dispatch()
         
