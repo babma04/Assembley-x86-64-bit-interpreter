@@ -3,6 +3,7 @@
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include "memory_eng.c"
 
 // Compilation: gcc -O3 -shared -o libops.so -fPIC operations.c
 
@@ -175,7 +176,7 @@ void dispatch()
 
 void exec_mov(Info *s)
 {
-    return;
+    ;
 }
 
 void exec_halt(Info *s)

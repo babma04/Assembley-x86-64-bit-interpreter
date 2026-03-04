@@ -11,6 +11,18 @@ from fpu import FPU
 
 
 class Control_Unit:
+    """
+    Control Unit class responsible for fetching instructions, decoding them, validating operands, and dispatching execution to the appropriate functional units (CPU, Data Path, ALU, FPU).
+    It also manages the state of the CPU, including registers, flags, and the instruction pointer (RIP).
+    The Control Unit interacts with the Data Memory, Segment Mapper, and the functional units to execute instructions and update the CPU state accordingly.
+
+    Attributes:
+
+    """
+    
+    # -----------------
+    # keywords mapping
+    # -----------------
 
     SIZE_DIRECTIVES = {
         'byte': 1, 'word': 2, 'dword': 4, 'qword': 8
@@ -20,7 +32,10 @@ class Control_Unit:
         'byte': 0xFF, 'word': 0xFFFF, 'dword': 0xFFFFFFFF, 'qword': 0xFFFFFFFFFFFFFFFF
     }
 
-
+    # ----------------------------------------
+    # Patterns for operand type determination
+    # ----------------------------------------
+    
     COMPONENTS_ADDRESSING_PATTERN = r'(0x[\da-fA-F]+|[a-zA-Z_][a-zA-Z0-9_]*|\d+)'
     GENERAL_PURPOSE_REGISTERS_PATTERN = r'([er]?[abcd]x|[er]?[sb]p|[er]?[sd]i|[er]?ip|r[89][bdlw]?|r1[0-5][bdlw]?|[abcd][hl])'
     FPU_REGISTERS_PATTERN = r'(ymm[0-9]|xmm[0-9]|ymm1[0-5]|xmm1[0-5])'
@@ -44,24 +59,12 @@ class Control_Unit:
         self.alu: ALU = ALU()
         self.fpu: FPU = FPU()     
 
+        # Usefull registers and flags attributes
         self.registers: Registers_Interface = Registers_Interface()
-
-        # xmm registers are treated as the lower 16 bytes of each respective ymm register
-        self.ymm: dict[str, bytearray] = {
-            f"ymm{i}": bytearray(32) for i in range(16)
-        }
-
-        # Instruction Pointer
         self.rip: int = loader.rip  # Instruction Pointer initialized from Segment Mapper
-        # Flag state holders
-        self.flags: dict[str, int] = {
-            'ZF': 0,  # Zero Flag
-            'SF': 0,  # Sign Flag
-            'OF': 0,  # Overflow Flag
-            'CF': 0   # Carry Flag
-        }
+        self.flags: ... # Register Interface method that returns the full flags state
 
-        # Gets the parsed sections from segment_mapper
+        # Parsed sections from segment_mapper
         self.text_section: list[list[str]] = loader.memory_list
         self.rodata_section: DataSectionInfo = loader.rodata_segment
         self.data_section: DataSectionInfo = loader.data_segment
@@ -70,7 +73,6 @@ class Control_Unit:
         self.constants: ConstantMap = loader.constants
 
         # Helper instances for the execution
-        self.halted: bool = False
         self.finished: bool = False
         self.current_fu: str = "cpu" # (cpu/data_path/alu/fpu)
         self.current_instruction: str | None = None
@@ -94,7 +96,11 @@ class Control_Unit:
     def run(self) -> None:
         self.rip += 1
         # Improve this loop to enable debugging features
-        while not self.halted or not self.finished:
+        while not self.finished:
+            # Debbuging feature: Trap flag verification. If the trap flag is raised, execute the trap flag command and halt execution before executing the instruction in the current line.
+            if self.registers.read_trap_flag() == 1:
+                # Should allow for gdb command actions
+                self.execute_state_command()
             try:
                 self.step()
             except Exception as e:
@@ -120,6 +126,8 @@ class Control_Unit:
         except ValueError as e:
             print(e)
             sys.exit(1) 
+
+    #-------------------------------
 
     def fetch(self) -> None:
         """
@@ -954,10 +962,65 @@ class Control_Unit:
                 raise ValueError(f"INVALID EXPRESSION {expression} IN MEMORY ADDRESSING MODE AT LINE {self.rip}!")
         else:
             return [0,-1]
+    
+    # -------------------------
+    # DEBBUGGING METHODS
+    # -------------------------
+    def execute_state_command(self) -> None:
+        """
+        Ciclycally asks for user input to execute commands to print the state of the program in execution.\n
+        Commands are:\n
+        - 'registers': prints the state of the registers
+        - 'memory': prints the state of the memory
+        - 'data': prints the state of the data section
+        - 'rodata': prints the state of the rodata section
+        - 'bss': prints the state of the bss section
+        - 'constants': prints the state of the constants declared
+        - 'rip': prints the current value of the rip register
+        - 'fu': prints the current functional unit in use
+        - 'help': prints the list of commands available
+        - 'step' : executes the instruction at the current rip and updates the state of the program accordingly (to be used to execute step by step)
+        - 'exit': exits the program and stops execution
+        If an invalid command is given it will print an error message and ask for a new command.
+        """
+        while True:
+            command: str = input("Enter a command to print the state of the program or 'help' to see the list of commands available: ")
+            if command == "registers":
+                # self.print_registers()
+                pass
+            elif command == "memory":
+                # self.print_memory()
+                pass
+            elif command == "data":
+                # self.print_data_section()
+                pass
+            elif command == "rodata":
+                # self.print_rodata_section()
+                pass
+            elif command == "bss":
+                # self.print_bss_section()
+                pass
+            elif command == "constants":
+                # self.print_constants()
+                pass
+            elif command == "rip":
+                print(f"Current value of rip: {self.rip}")
+            elif command == "fu":
+                print(f"Current functional unit in use: {self.current_fu}")
+            elif command == "help":
+                print("List of commands available:\n- 'registers': prints the state of the registers\n- 'memory': prints the state of the memory\n- 'data': prints the state of the data section\n- 'rodata': prints the state of the rodata section\n- 'bss': prints the state of the bss section\n- 'constants': prints the state of the constants declared\n- 'rip': prints the current value of the rip register\n- 'fu': prints the current functional unit in use\n- 'help': prints this list of commands available\n- 'exit': exits the program and stops execution")
+            elif command == "step":
+                return
+            elif command == "exit":
+                print("Exiting program and stopping execution...")
+                sys.exit(0)
+            else:
+                print("Invalid command! Enter 'help' to see the list of commands available.")
+
         
-    #-------------------------------
+    # -------------------------------
     # SYSCALL'S  AND CALL'S METHODS
-    #-------------------------------
+    # -------------------------------
 
     def syscall(self) -> None:
         """

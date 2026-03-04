@@ -136,27 +136,129 @@ void write_reg(int reg_id, int64_t value, int size, int is_high)
     }
 }
 
+
 //-------------------------
 // Read related funtions
 //-------------------------
 
+/**
+ * read_8b_reg: Hardware Dispatcher fo 8 byte registers.
+ * @param reg_id Index of the register as defined by the order of initialization in the CPURegs sructure
+ * @return The 64-bit value of the given register
+ * @warning The index must be valid for a correct result
+ */
 uint64_t read_8b_reg(int reg_id) {
     x86_aliased_registers *target = get_reg_ptr(reg_id);
     return target->r64;
 }
 
+/**
+ * read_4b_reg: Hardware Dispatcher fo 4 byte registers.
+ * @param reg_id Index of the register as defined by the order of initialization in the CPURegs sructure
+ * @return The 32-bit value of the given register
+ * @warning The index must be valid for a correct result
+ */
 uint32_t read_4b_reg(int reg_id) {
     x86_aliased_registers *target = get_reg_ptr(reg_id);
     return target->e32;
 }
 
+/**
+ * read_2b_reg: Hardware Dispatcher fo 2 byte registers.
+ * @param reg_id Index of the register as defined by the order of initialization in the CPURegs sructure
+ * @return The 16-bit value of the given register
+ * @warning The index must be valid for a correct result
+ */
 uint16_t read_2b_reg(int reg_id) {
     x86_aliased_registers *target = get_reg_ptr(reg_id);
     return target->x16;
 }
 
+/**
+ * read_1b_reg: Hardware Dispatcher fo 1 byte registers.
+ * @param reg_id Index of the register as defined by the order of initialization in the CPURegs sructure
+ * @param is_high Boolean (1 if accessing AH/BH/CH/DH)
+ * @return The 8-bit value of the given register
+ * @warning The index must be valid for a correct result
+ */
 uint8_t read_1b_reg(int reg_id, int is_high) {
     x86_aliased_registers *target = get_reg_ptr(reg_id);
     if (is_high && reg_id < 4) return target->r8.h;
     return target->r8.l;
+}
+
+// ------------------------------------
+// Flag reading and writing funtions
+// ------------------------------------
+
+/**
+ * read_rflags: Returns the value of the rflags register
+ * @return The 32-bit value of the rflags register
+ */
+uint32_t read_rflags()
+{
+    return current_state.rflags;
+}
+
+/**
+ * read_parity_flag: Returns the value of the parity flag (PF) in the rflags register
+ * @return 1 if the parity flag is set, 0 otherwise
+ */
+int read_trap_flag()
+{
+    return (current_state.rflags >> 8) & 0x1;
+}
+
+/**
+ * read_carry_flag: Returns the value of the carry flag (CF) in the rflags register
+ * @return 1 if the carry flag is set, 0 otherwise
+ */
+int read_carry_flag()
+{
+    return (current_state.rflags & 0x1);
+}
+
+/**
+ * read_zero_flag: Returns the value of the zero flag (ZF) in the rflags register
+ * @return 1 if the zero flag is set, 0 otherwise
+ */
+int read_zero_flag()
+{
+    return (current_state.rflags >> 6) & 0x1;
+}
+
+/**
+ * read_sign_flag: Returns the value of the sign flag (SF) in the rflags register
+ * @return 1 if the sign flag is set, 0 otherwise
+ */
+int read_sign_flag()
+{
+    return (current_state.rflags >> 7) & 0x1;
+}
+
+/**
+ * read_overflow_flag: Returns the value of the overflow flag (OF) in the rflags register
+ * @return 1 if the overflow flag is set, 0 otherwise
+ */
+int read_overflow_flag()
+{
+    return (current_state.rflags >> 11) & 0x1;
+}
+
+/**
+ * write_rflags: Writes a value to the rflags register
+ * @param value The 32-bit value to write to the rflags register
+ */
+void write_rflags(uint32_t value)
+{
+    current_state.rflags = value;
+}
+
+/**
+ * set_trap_flag: Toggles the value of the trap flag (TF) in the rflags register
+ * @warning This function toggles the value of the trap flag, so if it is currently set it will be cleared, and if it is currently cleared it will be set
+ */
+void set_trap_flag()
+{
+    current_state.rflags ^= (1 << 8);
 }

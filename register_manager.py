@@ -82,9 +82,16 @@ class Registers_Interface:
 
         self.lib.get_cpu_state.restype = ctypes.POINTER(CPURegsStruct)
         self.lib.read_8b_reg.restype = ctypes.c_int64
+        self.lib.read_8b_reg.argtypes = [ctypes.c_int]
         self.lib.read_4b_reg.restype = ctypes.c_int32
+        self.lib.read_4b_reg.argtypes = [ctypes.c_int]
         self.lib.read_2b_reg.restype = ctypes.c_int16
+        self.lib.read_2b_reg.argtypes = [ctypes.c_int]
         self.lib.read_1b_reg.restype = ctypes.c_int8
+        self.lib.read_1b_reg.argtypes = [ctypes.c_int, ctypes.c_int]
+        self.lib.read_rflags.restype = ctypes.c_uint32
+        self.lib.read_rflags.argtypes = []
+
         # Parent registers mapping to ghet indexes
         self.regs_map: list[str] = ["rax", "rbx", "rcx", "rdx", "rsi", "rdi", "rbp", "rsp", "r8", "r9", "r10", "r11", "r12", "r13", "r14", "r15"]
 
@@ -217,5 +224,34 @@ class Registers_Interface:
         elif size == 4: return self.lib.read_4b_reg(reg_id)
         elif size == 2: return self.lib.read_2b_reg(reg_id)
         else: return self.lib.read_1b_reg(reg_id, is_high)
-        
+
+#----------------------------------
+# Flag Reading and Writing Methods
+#----------------------------------
+
+    # TO IMPLEMENT
+    ## CURRENT PLAN IT TO ADD A STEP VERIFICATION STEP THAT VERIFIES ALL FLAGS IN THE CONTROL UNIT AND THEN CALLS THE APPROPRIATE FUNCTION IN THE C STRUCTURE TO UPDATE THE FLAGS IN THE CPU STATE STRUCTURE.
+    def read_flags(self) -> int:
+        """
+        Reads the value of the flags register in the c structure file.
+        :return: Value of the flags register
+        :rtype: int
+        """
+        return int(self.lib.read_rflags())
+    
+    def read_trap_flag(self) -> int:
+        """
+        Reads the value of the trap flag in the c structure file.
+        :return: Value of the trap flag
+        :rtype: int
+        """
+        return int(self.lib.read_trap_flag())
+    
+    def set_trap_flag(self, value: int) -> None:
+        """
+        Sets the value of the trap flag in the c structure file.
+        :param value: Value to set the trap flag to
+        :type value: int
+        """
+        self.lib.set_trap_flag(value)
         
