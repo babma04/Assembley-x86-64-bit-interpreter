@@ -24,6 +24,7 @@ class ALU:
 
     def __init__(self, libops_path: str="./libops.so") -> None:
         self.libops = ctypes.CDLL(os.path.abspath(libops_path))
+        self.result: int | None = None
         
 
         # Define C return and args types
@@ -62,9 +63,9 @@ class ALU:
         """
         self.libops.set_instruction(instruction)
         if op1_type != None:
-            self.libops.get_operand_info("op1", op1_address, op1_value, op1_size, op1_type)
+            self.libops.get_operand_info("op1", op1_address, op1_value, op1_size, op1_type.split(" ")[1])
         if op2_type != None:
-            self.libops.get_operand_info("op2", op2_address, op2_value, op2_size, op2_type)
+            self.libops.get_operand_info("op2", op2_address, op2_value, op2_size, op2_type.split(" ")[1])
     
     def execute(self):
         self.libops.dispatch()

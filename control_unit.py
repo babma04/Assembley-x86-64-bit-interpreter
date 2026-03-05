@@ -184,10 +184,8 @@ class Control_Unit:
                 self.call()
         else:
             current_fu: FU = self.get_current_fu()
-            current_fu.load_values(instruction, op1_value, op1_address, op1_type, op1_size, op2_value, op2_address, op2_type, op2_size, flags)
+            current_fu.load_values(instruction, int(op1_value), op1_address, op1_type, op1_size, int(op2_value), op2_address, op2_type, op2_size, flags)
             current_fu.execute()
-            if current_fu.result != b'0':
-                self.set_result(...)
 
     def validate_execution_state(self) -> None:
         """

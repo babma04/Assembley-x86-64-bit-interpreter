@@ -170,6 +170,37 @@ void dispatch()
     printf("Error: Unknown instruction %s\n", current_state->instruction);
 }
 
+// ---------------------------
+// Result management funtions
+// ---------------------------
+
+/**
+ * Reads the result of the current instruction execution and returns it if it's a register, otherwise returns NULL
+ * @return int Result of the instruction execution if it's a register, otherwise NULL
+ */
+int read_result()
+{
+    if (strcmp(*current_instruction_state.result.op_type, "register") == 0)
+    {
+        return current_instruction_state.result.value;
+    }
+    return NULL;
+}
+
+/**
+ * Writes the result of the current instruction execution if it's a memory address and cleans the current instruction state structure
+ * @warning If the result is not a memory address does nothing
+ * @warning After writing the result on memory cleans the current instruction state structure
+ */
+void set_result()
+{
+    if (strcmp(*current_instruction_state.result.op_type, "memory") == 0)
+    {
+        write_mem(current_instruction_state.result.address, current_instruction_state.result.value);
+    }
+    clean();
+}
+
 //----------------------
 // Data Path Functions
 //----------------------
