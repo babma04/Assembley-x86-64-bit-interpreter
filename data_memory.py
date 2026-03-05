@@ -52,7 +52,7 @@ class Data_Memory:
     # ------------------------
     def read_bytes(self, addr: int, size: int) -> bytes:
         """
-        Reads an integer representation of the desired data with a specific size in a specific address/addresses.
+        Reads an integer representation of the desired data with a specific size in a specific address.
         
         :param addr: address to start writting to.
         :type addr: int
