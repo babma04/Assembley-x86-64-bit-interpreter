@@ -1,5 +1,6 @@
 import ctypes
 import os
+from register_manager import Registers_Interface
 
 class Operand(ctypes.Structure):
     _fields_ = [
@@ -22,10 +23,10 @@ class ALU:
     
     """
 
-    def __init__(self, libops_path: str="./libops.so") -> None:
+    def __init__(self, register: Registers_Interface, libops_path: str="./libops.so") -> None:
         self.libops = ctypes.CDLL(os.path.abspath(libops_path))
         self.result: int | None = None
-        
+        self.register = register
 
         # Define C return and args types
         self.libops.get_operand_info.argtypes = [
@@ -67,6 +68,18 @@ class ALU:
         if op2_type != None:
             self.libops.get_operand_info("op2", op2_address, op2_value, op2_size, op2_type.split(" ")[1])
     
-    def execute(self):
+    def execute(self) -> None:
+        """
+        Executes the instruction loaded in the c structure and updates the result attribute with the result of the operation if it exists.
+        :param op1_expression: Expression of the first operand to check if the result should be updated with the value of the first operand
+        :type op1_expression: str
+        """
         self.libops.dispatch()
+        current_instruction_state = self.libops.get_current_instruction_state()
+        # If the result is a register, update the result attribute with the value of the register (Only registers should be handled since memory operands are directly written to memory in the c code)
+        if current_instruction_state.result.op_type != None and current_instruction_state.result.op_type.decode() == "register":
+            self.result = current_instruction_state.result.value
+        
+
+    
         

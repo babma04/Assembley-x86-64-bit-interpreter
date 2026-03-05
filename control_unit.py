@@ -119,9 +119,7 @@ class Control_Unit:
             if self.current_instruction != None:
                 # 2. Verifies if the instruction-operand set is valid and triggers the execution of the instruction in the respective funtional unit
                 self.execute(self.current_instruction, self.op1_value, self.op1_address, self.op1_type, self.op1_size, self.op2_value, self.op2_address, self.op2_type, self.op2_size, self.flags)
-                # 4. Verifies if the execution generated any type of side effects of flags and halted state and updates them
-                self.validate_execution_state()
-                # 5. Increases rip 
+                # 3. Increases rip 
             self.rip += 1
         except ValueError as e:
             print(e)
@@ -186,14 +184,23 @@ class Control_Unit:
             current_fu: FU = self.get_current_fu()
             current_fu.load_values(instruction, int(op1_value), op1_address, op1_type, op1_size, int(op2_value), op2_address, op2_type, op2_size, flags)
             current_fu.execute()
+            self.validate_execution_state(current_fu)
 
-    def validate_execution_state(self) -> None:
+    def validate_execution_state(self, current_fu: FU) -> None:
         """
         Docstring for validate_execution_state
         
         :param self: Description
         """
-        ...
+        if current_fu.result != None and self.op1 != None:
+                
+                result: int = current_fu.result
+                is_signed: bool = not (2**(self.op1_size * 8 - 1) <= result < 2**(self.op1_size * 8))
+
+                if result >= 2**(self.op1_size * 8):
+                    result = result % (2**(self.op1_size * 8))
+                self.registers.write_reg(self.op1, result, signed=is_signed)
+
 
     #-----------------------------------
     # General validation methods

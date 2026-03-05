@@ -42,8 +42,6 @@ void clean();
 // Instruction dispatching prototypes
 void dispatch();
 // Data Path funtions prototypes
-void exec_mov(Info *s);
-void exec_halt(Info *s);
 void exec_cmp(Info *s);
 void exec_jmp(Info *s);
 void exec_jb(Info *s);
@@ -82,11 +80,10 @@ typedef struct{
 // Lookup table to match string instructions with c funtions
 InstructionMap dispatch_table[] = {
     // Data Path
-    {"mov",  exec_mov},  {"halt", exec_halt}, {"cmp",  exec_cmp},
-    {"jmp",  exec_jmp},  {"jb",   exec_jb},   {"jl",   exec_jl},
-    {"ja",   exec_ja},   {"jg",   exec_jg},   {"je",   exec_je},
-    {"jne",  exec_jne},  {"jz",   exec_jz},   {"js",   exec_js},
-    {"jc",   exec_jc},   {"jo",   exec_jo},
+    {"cmp",  exec_cmp},  {"jmp",  exec_jmp},  {"jb",   exec_jb},
+    {"jl",   exec_jl},   {"ja",   exec_ja},   {"jg",   exec_jg},
+    {"je",   exec_je},   {"jne",  exec_jne},  {"jz",   exec_jz},
+    {"js",   exec_js},   {"jc",   exec_jc},   {"jo",   exec_jo},
 
     // ALU
     {"add",  exec_add},  {"adc",  exec_adc},  {"sub",  exec_sub},
@@ -184,6 +181,7 @@ int read_result()
     {
         return current_instruction_state.result.value;
     }
+    clean();
     return NULL;
 }
 
@@ -204,16 +202,6 @@ void set_result()
 //----------------------
 // Data Path Functions
 //----------------------
-
-void exec_mov(Info *s)
-{
-    ;
-}
-
-void exec_halt(Info *s)
-{
-    return;
-}
 
 void exec_cmp(Info *s)
 {
