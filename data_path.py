@@ -102,19 +102,27 @@ class Data_Path:
         :raises SyntaxError: if any of the mov instruction conditions are not met
         """
 
+        # INVALID CONDITIONS:
+
+        # Both operands must exist for the mov instruction.
         if self.op1_type == None or self.op2_type == None:
             raise SyntaxError("Both operands must exist for the mov instruction.")
-        elif len(self.op1_type) == 2 or len(self.op2_type) == 2 and self.op1_type[1] == "memory" and self.op2_type[1] == "memory":
+        # Both operands cannot be memory addresses simultaneously for the mov instruction.
+        elif len(self.op1_type.split()) == 2 or len(self.op2_type.split()) == 2 and self.op1_type[1] == "memory" and self.op2_type[1] == "memory":
             raise SyntaxError("The source and destination operands cannot both be memory addresses for the mov instruction.")
+        # The destination operand cannot be an immediate value or a constant for the mov instruction.
         elif self.op1_type == "immediate" or self.op1_type == "constant":
             raise SyntaxError("The source operand cannot be an immediate value or a constant for the mov instruction.")
+        # The destination operand cannot be a value in immutable rodata for the mov instruction.
         elif self.op1_address != None and self.op1_address < Segment_Mapper.DATA_BASE:
             raise SyntaxError("The source operand must be in the data or bss segment for the mov instruction.")
+        # COMPLEMENT WITH MORE CONDITIONS
         
     def ex_jp(self):
         """
         Executes the jump instructions
         """
+        
         
         
         

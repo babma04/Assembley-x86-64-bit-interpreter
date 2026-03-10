@@ -132,6 +132,7 @@ class Storage:
             data :dict[str, str | dict[str, int]]= {
                 'valid start': "_start", 
                 'data_path': {
+                    'lea': 2,
                     'mov': 2,
                     'jmp': 1,
                     'jb': 1,

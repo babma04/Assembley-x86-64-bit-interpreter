@@ -78,7 +78,7 @@ class ALU:
         current_instruction_state = self.libops.get_current_instruction_state()
         # If the result is a register, update the result attribute with the value of the register (Only registers should be handled since memory operands are directly written to memory in the c code)
         if current_instruction_state.result.op_type != None and current_instruction_state.result.op_type.decode() == "register":
-            self.result = current_instruction_state.result.value
+            self.result = current_instruction_state.result.value           
         
 
     

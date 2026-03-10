@@ -799,19 +799,6 @@ class Control_Unit:
             return True
         return False
     
-    def is_register(self, expression: str) -> bool:
-        """
-        Verifies if a given expression is a register
-
-        :param expression: Expression in verification
-        :type expression: str
-        :return: True if the expression is a register
-        :rtype: bool
-        """
-        if re.match(fr'^{self.REGISTER_PATTERN}$', expression):
-            return True
-        return False
-    
     def is_constant(self, expression: str) -> bool:
         """
         Verifies if a given expression is a constant
@@ -1053,6 +1040,20 @@ class Control_Unit:
     # -----------------------
     # STATIC HELPERS 
     # -----------------------
+
+    @staticmethod
+    def is_register(expression: str) -> bool:
+        """
+        Verifies if a given expression is a register
+
+        :param expression: Expression in verification
+        :type expression: str
+        :return: True if the expression is a register
+        :rtype: bool
+        """
+        if re.match(fr'^{Control_Unit.REGISTER_PATTERN}$', expression):
+            return True
+        return False
 
     @staticmethod
     def has_symbol(list: list[str], symbol: str) -> bool:
