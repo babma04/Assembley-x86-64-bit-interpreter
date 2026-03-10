@@ -26,7 +26,7 @@ class Segment_Mapper:
     :type stack_limit: int
     :return: None
     """
-    # Memory footprint optimization 
+    # Memory footprint optimization (TODO)
     __slots__ = (
         'stack_limit', 'memory_list', 'rodata_segment', 'data_segment', 
         'bss_segment', 'labels', 'constants', 'file_name', 
@@ -129,8 +129,13 @@ class Segment_Mapper:
             if tokens[0] == "section":
                 section_name: str = tokens[1]
                 if section_name == ".rodata" or section_name == ".data":
+                    if section_name == ".rodata":
+                        current_rip = Segment_Mapper.RODATA_BASE
+                    else :
+                        current_rip = Segment_Mapper.DATA_BASE
                     current_rip = self.load_data(current_rip, index, section_name)
                 elif section_name == ".bss":
+                    current_rip = Segment_Mapper.BSS_BASE
                     current_rip = self.load_bss(current_rip, index)
                 elif section_name == ".text":
                     self.load_text(current_rip, index)          # <<current_rip>> is passed if i decide to also start storing instructions in memory, for now IS INACTIVE!!!
@@ -161,6 +166,16 @@ class Segment_Mapper:
 
 
     def load_data(self, current_rip: Address, index: int, section: str) -> Address:
+        """
+        Takes care of .data and .rodata conponents parsing as well as validation of the declarations format.
+
+        :param current_rip: pointer to the Address in use to store values in the Data_memory object
+        :param index: number of the line being parsed
+        :param section: name of the section being parsed ('.data' or '.rodata')
+        :param is_rodata: flag indicating if the section is .rodata
+        :return: updated pointer to the Address in use to store values in the Data_memory object after loading the section
+        :rtype: Address
+        """
         index += 1
         while(self.memory_list[index][0] != "section" or index >= len(self.memory_list)):
             tokens: list[str] = self.memory_list[index]

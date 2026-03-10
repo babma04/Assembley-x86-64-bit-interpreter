@@ -133,8 +133,6 @@ class Storage:
                 'valid start': "_start", 
                 'data_path': {
                     'mov': 2,
-                    'halt': 0,
-                    'cmp': 2,
                     'jmp': 1,
                     'jb': 1,
                     'jl': 1,
@@ -148,6 +146,7 @@ class Storage:
                     'jo': 1
                 },
                 'alu': {
+                    'cmp': 2,
                     'add': 2,
                     'adc': 2,
                     'sub': 2,
