@@ -28,7 +28,8 @@ def main():
         argvcount: int = len(argv)
 
     loader: Segment_Mapper = Segment_Mapper(file, argvcount, argv, validation_file_name) 
-    cpu: Control_Unit = Control_Unit(loader.memory, loader, validation_file_name)           
+    cpu: Control_Unit = Control_Unit(loader.memory, loader, validation_file_name) 
+    print("DEBBUG")
     cpu.run()                 
 
 def get_file() -> str:

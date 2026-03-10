@@ -128,16 +128,16 @@ class Segment_Mapper:
 
             if tokens[0] == "section":
                 section_name: str = tokens[1]
-                if section_name == ".rodata" or section_name == ".data":
-                    if section_name == ".rodata":
+                if section_name.lstrip(".") == "rodata" or section_name.lstrip(".") == "data":
+                    if section_name.lstrip(".") == "rodata":
                         current_rip = Segment_Mapper.RODATA_BASE
                     else :
                         current_rip = Segment_Mapper.DATA_BASE
-                    current_rip = self.load_data(current_rip, index, section_name)
-                elif section_name == ".bss":
+                    current_rip = self.load_data(current_rip, index, section_name.lstrip("."))
+                elif section_name.lstrip(".") == "bss":
                     current_rip = Segment_Mapper.BSS_BASE
                     current_rip = self.load_bss(current_rip, index)
-                elif section_name == ".text":
+                elif section_name.lstrip(".") == "text":
                     self.load_text(current_rip, index)          # <<current_rip>> is passed if i decide to also start storing instructions in memory, for now IS INACTIVE!!!
 
             elif (Segment_Mapper.is_constant(tokens)):
@@ -243,7 +243,7 @@ class Segment_Mapper:
         size: int = number_of_bytes * times
         addresses: list[Address] = []
 
-        if section == ".data":
+        if section == "data":
             self.data_segment[line[0]]['size'] = size
             for i in range(size):
                 addresses.append(current_rip + i)
@@ -276,7 +276,7 @@ class Segment_Mapper:
         size: int = number_of_bytes * (len(line) - 2)
         addresses: list[Address] = []
 
-        if section == ".data":
+        if section == "data":
             self.data_segment[line[0]]['size'] = size
             for i in range(size):
                 addresses.append(current_rip + i)
@@ -311,7 +311,7 @@ class Segment_Mapper:
         size: int = number_of_bytes
         addresses: list[Address] = []
 
-        if section == ".data":
+        if section == "data":
             self.data_segment[line[0]]['size'] = size
             for i in range(size):
                 addresses.append(current_rip + i)

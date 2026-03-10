@@ -1,7 +1,6 @@
 import ctypes
 import os
 from register_manager import Registers_Interface
-from segment_mapper import Segment_Mapper
 
 class Operand(ctypes.Structure):
     _fields_ = [
@@ -114,7 +113,7 @@ class Data_Path:
         elif self.op1_type == "immediate" or self.op1_type == "constant":
             raise SyntaxError("The source operand cannot be an immediate value or a constant for the mov instruction.")
         # The destination operand cannot be a value in immutable rodata for the mov instruction.
-        elif self.op1_address != None and self.op1_address < Segment_Mapper.DATA_BASE:
+        elif self.op1_address != None and self.op1_address < 0x600000:  # Assuming rodata segment finishes at most at 0x600000
             raise SyntaxError("The source operand must be in the data or bss segment for the mov instruction.")
         # COMPLEMENT WITH MORE CONDITIONS
         
