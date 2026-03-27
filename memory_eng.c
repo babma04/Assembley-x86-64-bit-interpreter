@@ -1,27 +1,12 @@
+#include "memory_eng.h"
 #include <stdint.h>
 #include <stdlib.h>
-#include <stdio.h>
+#include <string.h>
 
 // Compilation command: gcc -O3 -shared -o libmmu.so -fPIC memory_eng.c 
 
-// Constants declarations
-#define PAGE_SIZE 4096  // 4kb per page
-#define MAX_PAGES 512 // 512 * 8 bytes per entry = 4kb tables
-
-// Structure definition of the Table of pages of data
-typedef struct {
-    void *entries[MAX_PAGES];  // allocates 8 bytes for the address 
-} Table;
-
-// Prototypes (Not strictly needed in this case, might remove later)
-uint8_t *decompose_address (uint64_t v_addr, int create_page);
-int write_mem (uint64_t v_addr, uint8_t *data, size_t size, int create_page);
-int write_block (uint64_t v_addr, uint8_t *data, size_t size, int create_page);
-int read_mem (uint64_t v_addr, uint8_t *buffer, size_t size);
-int read_block (uint64_t v_addr, uint8_t *buffer, size_t size);
-
 // Initializing Table at NULL and rewrite it as needed using the PML4 reg
-Table* CR3 = NULL;
+static Table* CR3 = NULL;
 
 /**
  * Main MMU funion. 

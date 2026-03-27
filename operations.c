@@ -3,7 +3,7 @@
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include "memory_eng.c"
+#include "memory_eng.h"
 
 // Compilation: gcc -O3 -shared -o libops.so -fPIC operations.c
 
@@ -172,17 +172,17 @@ void dispatch()
 // ---------------------------
 
 /**
- * Reads the result of the current instruction execution and returns it if it's a register, otherwise returns NULL
- * @return int Result of the instruction execution if it's a register, otherwise NULL
+ * Reads the result of the current instruction execution and returns it if it's a register, otherwise returns -1
+ * @return int Result of the instruction execution if it's a register, otherwise -1
  */
 int read_result()
 {
-    if (strcmp(*current_instruction_state.result.op_type, "register") == 0)
+    if (strcmp(current_instruction_state.result.op_type, "register") == 0)
     {
         return current_instruction_state.result.value;
     }
     clean();
-    return NULL;
+    return -1;
 }
 
 /**
@@ -192,9 +192,9 @@ int read_result()
  */
 void set_result()
 {
-    if (strcmp(*current_instruction_state.result.op_type, "memory") == 0)
+    if (strcmp(current_instruction_state.result.op_type, "memory") == 0)
     {
-        write_mem(current_instruction_state.result.address, current_instruction_state.result.value);
+        write_mem(current_instruction_state.result.address, (uint8_t*)&current_instruction_state.result.value, current_instruction_state.result.size, 1);
     }
     clean();
 }
