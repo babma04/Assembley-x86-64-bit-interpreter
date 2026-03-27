@@ -10,13 +10,15 @@
 
 // Structure definition of the Table of pages of data
 typedef struct {
-    void *entries[MAX_PAGES];  // allocates 8 bytes for the address (that's why void)
+    void *entries[MAX_PAGES];  // allocates 8 bytes for the address 
 } Table;
 
 // Prototypes (Not strictly needed in this case, might remove later)
-uint8_t *decompose_address(uint64_t v_addr, int create_page);
-void write_mem(uint64_t v_addr, uint8_t value);
-int read_mem(uint64_t v_addr, uint8_t *result);
+uint8_t *decompose_address (uint64_t v_addr, int create_page);
+int write_mem (uint64_t v_addr, uint8_t *data, size_t size, int create_page);
+int write_block (uint64_t v_addr, uint8_t *data, size_t size, int create_page);
+int read_mem (uint64_t v_addr, uint8_t *buffer, size_t size);
+int read_block (uint64_t v_addr, uint8_t *buffer, size_t size);
 
 // Initializing Table at NULL and rewrite it as needed using the PML4 reg
 Table* CR3 = NULL;
@@ -31,16 +33,13 @@ Table* CR3 = NULL;
  * @return Pointer to the physical byte, or NULL if unmapped and create_page is 0
  * @note create_page param affects directly Table structures creation permission. 
  */
-uint8_t *decompose_address(uint64_t v_addr, int create_page)
+uint8_t *decompose_address (uint64_t v_addr, int create_page)
 {
     // If the page_dir_root is not yet initialized initialize it
     if (!CR3)
     {
         // If create_pages is 0 then i can't read any page in this stage and should return NULL
-        if (!create_page)
-        {
-            return NULL;
-        }
+        if (!create_page) return NULL;
         // Else allocates a block of memory for a Table structure and starts it out at 0
         CR3 = (Table*)calloc(1, sizeof(Table));
     }
@@ -61,10 +60,7 @@ uint8_t *decompose_address(uint64_t v_addr, int create_page)
     if (!CR3->entries[pml4])
     {
         // If create_pages is 0 then i can't read any page in this stage and should return NULL
-        if(!create_page)
-        {
-            return NULL;
-        }
+        if(!create_page) return NULL;
         // Else allocates a block of memory for a Table structure and starts it out at 0
         CR3->entries[pml4] = calloc(1, sizeof(Table));
     }
@@ -75,10 +71,7 @@ uint8_t *decompose_address(uint64_t v_addr, int create_page)
     if(!dir_ptr_pointer->entries[dir_ptr])
     {
         // If create_pages is 0 then i can't read any page in this stage and should return NULL
-        if(!create_page)
-        {
-            return NULL;
-        }
+        if(!create_page) return NULL;
         // Else allocates a block of memory for a Table structure and starts it out at 0
         dir_ptr_pointer->entries[dir_ptr] = calloc(1, sizeof(Table));
     }
@@ -89,10 +82,7 @@ uint8_t *decompose_address(uint64_t v_addr, int create_page)
     if(!dir_pointer->entries[dir])
     {
         // If create_pages is 0 then i can't read any page in this stage and should return NULL
-        if(!create_page)
-        {
-            return NULL;
-        }
+        if(!create_page) return NULL;
         // Else allocates a block of memory for a Table structure and starts it out at 0
         dir_pointer->entries[dir] = calloc(1, sizeof(Table));
     }
@@ -103,12 +93,9 @@ uint8_t *decompose_address(uint64_t v_addr, int create_page)
     if(!table_pointer->entries[table])
     {
         // If create_pages is 0 then i can't read any page in this stage and should return NULL
-        if(!create_page)
-        {
-            return NULL;
-        }
+        if(!create_page) return NULL;
         // Else allocates a block of memory for a Table structure and starts it out at 0
-        table_pointer->entries[table] = calloc(1, sizeof(Table));
+        table_pointer->entries[table] = calloc(1, PAGE_SIZE);
     }
     // Else takes its pointer
     uint8_t *page_addr = (uint8_t*)table_pointer->entries[table];
@@ -118,41 +105,118 @@ uint8_t *decompose_address(uint64_t v_addr, int create_page)
 
 
 /**
- * Writes one byte in memory.
+ * Writes bytes in memory.
  * Uses the decompose method to get the real address and writes the value onto the new address.
- * If the address returned is not NULL writes value on it
+ * If the address returned is not NULL writes value on it, else returns without writing.
+ * Handles page crossing by checking if the write stays within the 4KB boundary.
+ * If the ammount of bytes to write is grater than one uses the write_block function to handle the write operation.
  * 
  * @param v_addr Virtual address given by the caller
- * @param value 1 byte data to write
+ * @param data Pointer to the data to write
+ * @param size Size of the data to write in bytes (1,2,4,8)
+ * @param create_page Flag to indicate if pages should be created if they don't exist
+ * @return 0 on success, 1 if the write operation encounters an unmapped address (Segmentation Fault)
+ * @warning This function assumes that the data block does not exceed the maximum size of the virtual address space.
+ * @note The create_page flag affects directly the permission to create new pages in the memory.
+ * If set to 0, the function will not create new pages and will return without writing if the target page does not exist. 
+ * If set to 1, the function will create new pages as needed to accommodate the write operation.
  */
-void write_mem(uint64_t v_addr, uint8_t value)
+int write_mem (uint64_t v_addr, uint8_t *data, size_t size, int create_page)
 {
-    uint8_t *physical_addr = decompose_address(v_addr, 1);
-    if (physical_addr)
+    if (size == 1)
     {
-        *physical_addr = value;
+        uint8_t *physical_addr = decompose_address(v_addr, create_page);
+        if (!physical_addr) return 1;
+        *physical_addr = *data;
+        return 0;
     }
+    else write_block(v_addr, data, size, create_page);
 }
 
 /**
- * Reads one byte from memory.
+ * Writes a block of data to virtual memory.
+ * Handles page crossing by checking if the write stays within the 4KB boundary.
+ * @param v_addr Virtual address where the block should be written
+ * @param data Pointer to the block of data to be written
+ * @param size Size of the data block in bytes
+ * @param create_page Flag to indicate if pages should be created if they don't exist
+ * @return 0 on success, 1 if the write operation encounters an unmapped address (Segmentation Fault)
+ * @warning This function assumes that the data block does not exceed the maximum size of the virtual address space.
+ * @note The create_page flag affects directly the permission to create new pages in the memory.
+ * If set to 0, the function will not create new pages and will return without writing if the target page does not exist. 
+ * If set to 1, the function will create new pages as needed to accommodate the write operation.
+ */
+int write_block (uint64_t v_addr, uint8_t *data, size_t size, int create_page)
+{
+    size_t written = 0;
+    while (written < size)
+    {
+        uint64_t current_addr = v_addr + written;
+        uint8_t *physical_addr = decompose_address(current_addr, create_page);
+        // If the physical address could not be read because of a Segmentation Fault return without writing
+        if (!physical_addr) return 1;
+
+        uint64_t offset = current_addr & 0xFFF; // Offset within the page
+        size_t space_in_page = PAGE_SIZE - offset; // Space left in the current page
+        size_t to_write = (size - written < space_in_page) ? (size - written) : space_in_page; // Amount to write in the current page
+
+        memcpy(physical_addr, data + written, to_write);
+        written += to_write;
+    }
+    return 0;
+}
+
+/**
+ * Reads bytes from virtual memory.
  * Uses the decompose method to get the real address and reads its value.
- * If the address returned is NULL returns 1 to signal a Segmentation Fault
+ * If the address returned is NULL returns 1 to signal a Segmentation Fault.
+ * Handles page crossing by checking if the read stays within the 4KB boundary.
+ * If the ammount of bytes to read is grater than one uses the read_block function to handle the read operation.
  * 
  * @param v_addr Virtual address given by the caller
- * @param result Pointer to the memory block where the result is expected to be given if it is found
+ * @param buffer Pointer to the memory block where the result is expected to be given if it is found
+ * @param size Size of the data block to be read in bytes
  * @warning Uses 1 to signal a bad address to read and 0 to signal a success
+ * @warning This function assumes that the data block does not exceed the maximum size of the virtual address space.
  */
-int read_mem(uint64_t v_addr, uint8_t *result)
+int read_mem (uint64_t v_addr, uint8_t *buffer, size_t size)
 {
-    uint8_t *physical_addr = decompose_address(v_addr, 0);
-    // If the physical address could not be read because of a Segmentation Fault return 1
-    if (!physical_addr)
+    if (size == 1)
     {
-        return 1;
+        uint8_t *physical_addr = decompose_address(v_addr, 0);
+        // If the physical address could not be read because of a Segmentation Fault return 1
+        if (!physical_addr) return 1;
+        *buffer = *physical_addr;
+        return 0;
     }
+        return read_block(v_addr, buffer, size);    
+}
 
-    *result = *physical_addr;
+/**
+ * Reads a block of data from virtual memory.
+ * Handles page crossing by checking if the read stays within the 4KB boundary.
+ * 
+ * @param v_addr Virtual address where the block should be read from
+ * @param buffer Pointer to the buffer where the read data should be stored
+ * @param size Size of the data block to be read in bytes
+ * @return 0 on success, 1 if any part of the read operation encounters an unmapped address (Segmentation Fault)
+ */
+int read_block (uint64_t v_addr, uint8_t *buffer, size_t size)
+{
+    size_t read = 0;
+    while (read < size)
+    {
+        uint64_t current_addr = v_addr + read;
+        uint8_t *physical_addr = decompose_address(current_addr, 0);
+
+        // If the physical address could not be read because of a Segmentation Fault return 1
+        if (!physical_addr) return 1;
+
+        uint64_t offset = current_addr & 0xFFF; // Offset within the page
+        size_t space_in_page = PAGE_SIZE - offset; // Space left in the current page
+        size_t to_read = (size - read < space_in_page) ? (size - read) : space_in_page; // Amount to read in the current page
+        memcpy(buffer + read, physical_addr + offset, to_read);
+        read += to_read;
+    }
     return 0;
-    
 }

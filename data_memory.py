@@ -1,8 +1,6 @@
 import ctypes
 import os
-
-# NEEDS TO RECEIVE INTS NOT BYTES
-
+from register_manager import Registers_Interface
 
 class Data_Memory:
     """
@@ -30,13 +28,13 @@ class Data_Memory:
     """
 
     RODATA_BASE: int = 0x500000
-    STACK_DEFAULT: int = 0x7fffffffe000
+    STACK_START = 0x7fffffffe000
+    STACK_LIMIT: int = 0xe000000000  # Arbitrary lower limit for stack growth to prevent overflow
 
-    def __init__(self, memory_base: int = RODATA_BASE, stack_start: int = STACK_DEFAULT):
-        self.start: int= memory_base
-        self.stack_start: int= stack_start     
-        self.stack_pointer: int= stack_start
-
+    def __init__(self, registers: Registers_Interface, memory_base: int = RODATA_BASE) -> None:
+        self.start: int= memory_base 
+        self.registers = registers
+        
         # Loads C memory management lib as an instance of the class
         _base_dir = os.path.dirname(os.path.abspath(__file__))
         _lib_path = os.path.join(_base_dir, "libmmu.so")
@@ -52,39 +50,32 @@ class Data_Memory:
     # ------------------------
     def read_bytes(self, addr: int, size: int) -> bytes:
         """
-        Reads an integer representation of the desired data with a specific size in a specific address.
+        Reads a byte representation of the data at a specific address/addresses with a specific size.\n
+        Uses the read_mem function from the c script to read the value from memory.\n
+        Returns the read data as a bytes object. If the read operation fails (e.g., due to a segmentation fault), raises a MemoryError.
         
-        :param addr: address to start writting to.
+        :param addr: address to start reading from.
         :type addr: int
-        :param size: size of the data to write: [1,2,4,8] bytes
+        :param size: size of the data to read: [1,2,4,8] bytes
         :type size: int
         :return: byte values at specific addresses
         :rtype: bytes
+        :raises MemoryError: If the read operation fails (e.g., due to a segmentation fault)
         """
-        return bytes(self._c_read(addr + i) for i in range(size))
-    
-    def _c_read(self, addr: int) -> int:
-        """
-        Uses the read_mem funtion from the c script to read the value from memory.
-        If the read returns 1 (signal for a misread) a MemoryError is raised.
-
-        :param addr: Virtual address to read from.
-        :type addr: int
-        :return: the integer at the given memory address
-        :rtype: int
-        :raises MemoryError: If a misread is detected
-        """
-        res = ctypes.c_uint8(0)
-        # If a misread is signaled raise MemoryError  
-        if self.lib.read_mem(addr, ctypes.byref(res)) == 1:  
+        #return bytes(self._c_read(addr + i) for i in range(size))
+        buffer = (ctypes.c_uint8 * size)()  # Create a buffer to hold the read bytes
+        if self.lib.read_mem(addr, buffer, size) == 1:  # Read memory into the buffer
             raise MemoryError(f"Segmentation Fault at 0x{hex(addr)}")
-        # Else return the pointer's value
-        return res.value
+        return bytes(buffer)  # Convert the buffer to bytes and return
     
 
-    def write_bytes(self, addr: int, size: int, data: bytes) -> None:
+    def write_bytes(self, addr: int, data: bytes, size: int, create_page: bool = True) -> None:
         """
-        Writes a byte representation of the desired data with a specific size in a specific address/addresses.
+        Writes a byte representation of the desired data with a specific size in a specific address/addresses.\n
+        Uses the write_mem function from the c script to write the value to memory.\n
+        If the write operation fails (e.g., due to a segmentation fault), raises a MemoryError.
+        Uses a helper function to ensure that the data being written has the correct number of bytes for the specified size, padding with zeros if necessary.
+        Has a flag to indicate if pages should be created if they don't exist, which affects the behavior of the write operation in case of unmapped addresses.
         
         :param addr: address to start writting to.
         :type addr: int
@@ -92,13 +83,16 @@ class Data_Memory:
         :type size: int
         :param data: data to write
         :type data: bytes
+        :param create_page: flag to indicate if pages should be created if they don't exist (default is True)
+        :type create_page: bool
+        :raises MemoryError: If the write operation encounters an unmapped address (Segmentation Fault
         """
         # Verify data correctness 
         if not self.valid_data_length(data, size):
             data = self.get_valid_data(data, size)
-        # For each byte in data write it onto sequencial addresses starting at the base address
-        for i, b in enumerate(data):
-            self._c_write(addr + i, b)
+        c_data = (ctypes.c_uint8 * size).from_buffer_copy(data)  # Convert data to a C array
+        if self.lib.write_mem(addr, c_data, size, 1 if create_page else 0) == 1:  # Write memory from the C array
+            raise MemoryError(f"Segmentation Fault at 0x{hex(addr)}")
     
     def valid_data_length(self, data: bytes, size: int) -> bool:
         """
@@ -127,18 +121,6 @@ class Data_Memory:
         :rtype: bytes
         """
         return data[:size].ljust(size, b'\x00')
-    
-    def _c_write(self, addr: int, value: int) -> None:
-        """
-        Uses the write_mem funtion from the c script to write the value into memory.
-        Value must be 1 byte or will be truncated.
-
-        :param addr: Virtual address to write to.
-        :type addr: int
-        :param value: 1 byte value to write.
-        :type value: int
-        """
-        self.lib.write_mem(addr, value & 0xFF)
 
     # -----------------------
     #  STACK OPERATIONS (fixed 8 bytes per entry)
@@ -147,13 +129,28 @@ class Data_Memory:
         """
         Push a full 8-byte (64-bit) value.
         All stack cells are 8 bytes no matter what.
+        If the value provided is less than 8 bytes, it will be padded with zeros to fit the stack cell size. If it exceeds 8 bytes, an error will be raised.
+        Uses the write_bytes method to write the value to the stack, ensuring that the stack pointer is updated correctly and that stack overflow is prevented by checking against a predefined stack limit.
+        The create_page flag is set to True for stack operations to allow the stack to grow as needed, but stack overflow is prevented by the stack limit check.
         
         :param value: value to add to the stack
         :type value: bytes
+        :raises MemoryError: If the stack overflows (i.e., if the stack pointer goes below an arbitrary lower limit)
+        :raises ValueError: If the value exceeds the stack cell size of 8 bytes
         """
+        rsp = self.registers.read_reg('rsp')
+        # Check for stack overflow before pushing
+        if rsp < self.STACK_LIMIT:
+            raise MemoryError("Stack overflow: cannot push more data onto the stack.")
+        # Ensure the value is exactly 8 bytes, padding with zeros if necessary, or truncating if it's too long
+        elif len(value) < 8:
+            value = self.get_valid_data(value, 8)
+        # If the value is longer than 8 bytes, signals an error
+        elif len(value) > 8:
+            raise ValueError("Value exceeds stack cell size of 8 bytes.")
         # stack grows downward
-        self.stack_pointer -= 0x8
-        self.write_bytes(self.stack_pointer, 8, value)
+        self.registers.write_reg('rsp', rsp - 0x8)
+        self.write_bytes(rsp - 0x8, value, 8)
 
     def pop(self) ->  bytes:
         """
@@ -161,7 +158,13 @@ class Data_Memory:
         
         :return: current value at the top of the stack
         :type: bytes
+        :raises MemoryError: If the stack underflows (i.e., if the stack pointer goes above the stack start address)
         """
-        value = self.read_bytes(self.stack_pointer, 8)
-        self.stack_pointer += 0x8
+        rsp = self.registers.read_reg('rsp')
+        # Check for stack underflow before popping
+        if rsp >= self.STACK_START:
+            raise MemoryError("Stack underflow: cannot pop from an empty stack.")
+        value = self.read_bytes(rsp, 8)
+        self.write_bytes(rsp, b'\x00' * 8, 8)  # Clear the popped value from the stack (optional)
+        self.registers.write_reg('rsp', rsp + 0x8)
         return value
