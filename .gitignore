@@ -1,0 +1,13 @@
+# Compiled Binaries
+lib/
+build/
+*.o
+*.so
+
+# Python Cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# OS specific
+.DS_Store
