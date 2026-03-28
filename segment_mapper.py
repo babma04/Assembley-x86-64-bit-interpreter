@@ -1,7 +1,8 @@
 import sys
-from storage import Storage
-from data_memory import Data_Memory
-from my_types import DataSectionInfo, BssSectionInfo, LabelMap, ConstantMap, Address
+from helpers.storage import Storage
+from bridges.data_memory import Data_Memory
+from bridges.register_manager import Registers_Interface
+from helpers.my_types import DataSectionInfo, BssSectionInfo, LabelMap, ConstantMap, Address
 import re
 
 class Segment_Mapper:
@@ -110,7 +111,7 @@ class Segment_Mapper:
         
         Storage.save_file(file_name, self.memory_list)
         # Returns a non-initialized Data_memory object for parsing
-        return Data_Memory(self.RODATA_BASE, stack_start=self.STACK_START)
+        return Data_Memory(self.RODATA_BASE)
     
 
     def parse_section(self) -> None:

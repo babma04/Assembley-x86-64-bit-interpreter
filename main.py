@@ -2,7 +2,7 @@ import os
 import sys
 from segment_mapper import Segment_Mapper
 from control_unit import Control_Unit
-from storage import Storage
+from helpers.storage import Storage
 
 def main():
     """

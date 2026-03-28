@@ -1,10 +1,10 @@
 import sys
 import re
-from storage import Storage
-from data_memory import Data_Memory
-from register_manager import Registers_Interface
+from helpers.storage import Storage
+from bridges.data_memory import Data_Memory
+from bridges.register_manager import Registers_Interface
 from segment_mapper import Segment_Mapper
-from my_types import DataSectionInfo, BssSectionInfo, LabelMap, ConstantMap, FU
+from helpers.my_types import DataSectionInfo, BssSectionInfo, LabelMap, ConstantMap, FU
 from data_path import Data_Path
 from alu import ALU
 from fpu import FPU
