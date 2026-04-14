@@ -101,12 +101,36 @@ Memory reading will follow the same structure of the writing, returning the firs
 
 
 ## Folder Structure
-    project-folder/
-    ├── main.py/
-    ├── cpu.py/
-    ├── storage.py/
-    ├── register.py/
-    └── README.md
+```text
+    CPU_SIMULATOR/
+    |
+    |-- bridges/            # Bridges between the c files and the python classes
+    |    |-- __init__.py
+    |    |-- data_memory.py
+    |    |-- register_manager.py
+    |-- helpers/            # Helpers for storage and types definition in python
+    |    |-- __init__.py
+    |    |-- my_types.py
+    |    |-- storage.py
+    |-- include/            # c headers
+    |    |-- memory_eng.h
+    |    |-- registers.h
+    |    |-- operations.h
+    |-- src/                # c implementations
+    |    |-- memory_eng.c
+    |    |-- registers.c
+    |    |-- operations.c
+    |-- tests/              # tests (TODO)
+    |-- alu.py
+    |-- control_unit.py
+    |-- data_path.py
+    |-- fpu.py
+    |-- segment_mapper.py
+    |-- main.py
+    |-- .gitignore
+    |-- Makefile
+    |-- README.md
+```
 
 ## Roadmap
 ### Planned improvement
