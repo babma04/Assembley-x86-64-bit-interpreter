@@ -3,8 +3,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-// Compilation command: gcc -O3 -shared -o libmmu.so -fPIC memory_eng.c 
-
 // Initializing Table at NULL and rewrite it as needed using the PML4 reg
 static Table* CR3 = NULL;
 

@@ -3,8 +3,6 @@
 #include <stdio.h>
 #include <stddef.h>
 
-// Compilation command: gcc -O3 -shared -o libreg.so -fPIC registers.c
-
 // Defines the structure of the 4 registers with high and low byte access
 union x86_aliased_registers {
     uint64_t r64;

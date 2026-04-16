@@ -1,82 +1,37 @@
-#include <stdint.h>
-#include <string.h>
-#include <ctype.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include "memory_eng.h"
+#include "../include/operations.h"
 
-// Compilation: gcc -O3 -shared -o libops.so -fPIC operations.c
+// --------------------------------------------------------------------------------
+// Structures implementations
+// --------------------------------------------------------------------------------
 
 // Structure for each alu operand's necessary info
-typedef struct{
+struct Operand{
     int address;
     int value;
     int size; // 1,2,4,8
     char *op_type;
-} Operand;
+};
 
 // To be implemented a fpu operand struct
 
 // Structure for all necessaryu instruction info
-typedef struct{
+struct Info {
     char *instruction;
     Operand op1;
     Operand op2;
     Operand result;
-} Info;
-Info current_instruction_state = {0};
+};
 
-/**
- * Gets the pointer to the structure with the instruction info
- */
-Info *get_current_state()
-{
-    return &current_instruction_state;
-}
-
-// Prototypes
-// Operand management prototypes
-void get_operand_info(char *operand, int address, int value, int size, char *op_type);
-void set_instruction(char *instruction);
-void clean();
-// Instruction dispatching prototypes
-void dispatch();
-// Data Path funtions prototypes
-void exec_cmp(Info *s);
-void exec_jmp(Info *s);
-void exec_jb(Info *s);
-void exec_jl(Info *s);
-void exec_ja(Info *s);
-void exec_jg(Info *s);
-void exec_je(Info *s);
-void exec_jne(Info *s);
-void exec_jz(Info *s);
-void exec_js(Info *s);
-void exec_jc(Info *s);
-void exec_jo(Info *s);
-// ALU funtions prototypes
-void exec_add(Info *s);
-void exec_adc(Info *s);
-void exec_sub(Info *s);
-void exec_sbb(Info *s);
-void exec_inc(Info *s);
-void exec_dec(Info *s);
-void exec_and(Info *s);
-void exec_or(Info *s);
-void exec_xor(Info *s);
-void exec_not(Info *s);
-void exec_neg(Info *s);
-void exec_xchg(Info *s);
-// FPU funtions prototypes
-// (TODO)
-
-// Standard instruction funtion signature alias
-typedef void (*InstructionFunc)(Info *);
 // Instructions link struct
-typedef struct{
+struct InstructionMap {
     char *instruction;
     InstructionFunc func;
-} InstructionMap;
+};
+
+// --------------------------------------------------------------------------------
+// Lookup Table
+// --------------------------------------------------------------------------------
+
 // Lookup table to match string instructions with c funtions
 InstructionMap dispatch_table[] = {
     // Data Path
@@ -97,51 +52,75 @@ InstructionMap dispatch_table[] = {
 // Table size constant
 #define TABLE_SIZE (sizeof(dispatch_table) / sizeof(InstructionMap))
 
-//----------------------------------------
-// Operand fetching and cleaning funtions
-//----------------------------------------
+// --------------------------------------------------------------------------------
+// Operand fetching, setting and cleaning funtions
+// --------------------------------------------------------------------------------
+
+/**
+ * Creates a pointer to the operand Info structure and returns it
+ */
+Info* create_operand_state ()
+{
+    Info *op_state = malloc (sizeof(Info));
+    return op_state;
+}
 
 /**
  * Sets the operand info in the structurer
  * 
+ * @param current_instruction_state Pointer to the Info structure holding all operand, instruction and results info
  * @param operand Address for the sequence of charaters that define the operand to update
  * @param address Address of the operand if any
  * @param value Value of the given operand
  * @param size Number of bytes that the operand take
  * @param type Address for the sequence of characters that define the data type of this operands value
  */
-void get_operand_info(char *operand, int address, int value, int size, char *op_type)
+void get_operand_info(Info *current_instruction_state, char *operand, int address, int value, int size, char *op_type)
 {
     if (operand != NULL && strcmp(operand, "op1") == 0 )
     {
-        current_instruction_state.op1.address = address;
-        current_instruction_state.op1.value = value;
-        current_instruction_state.op1.size = size;
-        current_instruction_state.op1.op_type = op_type;
+        current_instruction_state->op1.address = address;
+        current_instruction_state->op1.value = value;
+        current_instruction_state->op1.size = size;
+        current_instruction_state->op1.op_type = op_type;
     } else
     {
-        current_instruction_state.op2.address = address;
-        current_instruction_state.op2.value = value;
-        current_instruction_state.op2.size = size;
-        current_instruction_state.op1.op_type = op_type;
+        current_instruction_state->op2.address = address;
+        current_instruction_state->op2.value = value;
+        current_instruction_state->op2.size = size;
+        current_instruction_state->op2.op_type = op_type;
     }
 }
 
 /**
  * Sets the current instruction in use
+ * @param current_instruction_state Pointer to the Info structure holding all operand, instruction and results info
  * @param instruction Instruction to execute
  */
-void set_instruction(char *instruction)
+void set_instruction(Info *current_instruction_state, char *instruction)
 {
-    current_instruction_state.instruction = instruction;
+    current_instruction_state->instruction = instruction;
 }
 
 /**
  * Resets all values in the structure to 0's
+ * @param current_instruction_state Pointer to the Info structure holding all operand, instruction and results info
  */
-void clean()
+void clean(Info *current_instruction_state)
 {
-    current_instruction_state = (Info){0};
+    Info *tmp = malloc(sizeof(Info));
+    free(current_instruction_state);
+    current_instruction_state = tmp;
+}
+
+/**
+ * Frees up the pointer from memory
+ * Mainly for integration with python
+ * @param ptr Pointer to free
+ */
+void free_pointer (Info* ptr)
+{
+    free(ptr);
 }
 
 //--------------------------------
@@ -151,20 +130,21 @@ void clean()
 /**
  * Instruction dispatcher using the lookup table in InstructionMap.
  * Calls the funtion associated to the instruction string.
+ * 
+ * @param current_state Pointer to the Info structure holding all operand, instruction and results info
  */
-void dispatch()
+void dispatch(Info *current_instruction_state)
 {
-    Info *current_state = (Info*) get_current_state();
-    if (!current_state->instruction) return;
+    if (!current_instruction_state->instruction) return;
     
     for (int i = 0; i < TABLE_SIZE; i++) {
-        if (strcmp(current_state->instruction, dispatch_table[i].instruction) == 0) {
-            dispatch_table[i].func(current_state);
+        if (strcmp(current_instruction_state->instruction, dispatch_table[i].instruction) == 0) {
+            dispatch_table[i].func(current_instruction_state);
             return;
         }
     }
     // Should never be reached as in this point the instruction has already been validated
-    printf("Error: Unknown instruction %s\n", current_state->instruction);
+    printf("Error: Unknown instruction %s\n", current_instruction_state->instruction);
 }
 
 // ---------------------------
@@ -173,30 +153,34 @@ void dispatch()
 
 /**
  * Reads the result of the current instruction execution and returns it if it's a register, otherwise returns -1
+ * 
+ * @param current_instruction_state Pointer to the Info structure holding all operand, instruction and results info
  * @return int Result of the instruction execution if it's a register, otherwise -1
  */
-int read_result()
+int read_result(Info *current_instruction_state)
 {
-    if (strcmp(current_instruction_state.result.op_type, "register") == 0)
+    if (strcmp(current_instruction_state->result.op_type, "register") == 0)
     {
-        return current_instruction_state.result.value;
+        return current_instruction_state->result.value;
     }
-    clean();
+    clean(current_instruction_state);
     return -1;
 }
 
 /**
  * Writes the result of the current instruction execution if it's a memory address and cleans the current instruction state structure
+ * 
+ * @param current_instruction_state Pointer to the Info structure holding all operand, instruction and results info
  * @warning If the result is not a memory address does nothing
  * @warning After writing the result on memory cleans the current instruction state structure
  */
-void set_result()
+void set_result(Info *current_instruction_state)
 {
-    if (strcmp(current_instruction_state.result.op_type, "memory") == 0)
+    if (strcmp(current_instruction_state->result.op_type, "memory") == 0)
     {
-        write_mem(current_instruction_state.result.address, (uint8_t*)&current_instruction_state.result.value, current_instruction_state.result.size, 1);
+        write_mem(current_instruction_state->result.address, (uint8_t*)&current_instruction_state->result.value, current_instruction_state->result.size, 1);
     }
-    clean();
+    clean(current_instruction_state);
 }
 
 //----------------------

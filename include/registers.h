@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 
+// Compilation command: gcc -O3 -shared -o libreg.so -fPIC registers.c
 
 // Specific register types
 // high and low byte accessible regs---------------------------------------------
@@ -46,4 +47,4 @@ void write_rflags (CPURegs *current_state, uint32_t value);
 void exch_rflag (CPURegs *current_state, int flag_id);
 void set_trap_flag (CPURegs *current_state);
 
-#endif
+#endif // REGISTERS_H
