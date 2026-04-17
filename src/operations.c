@@ -62,6 +62,12 @@ InstructionMap dispatch_table[] = {
 Info* create_operand_state ()
 {
     Info *op_state = malloc (sizeof(Info));
+
+    if (op_state == NULL)
+    {
+        printf("operand table creation error. NULL pointer was achieved!\n");
+        return NULL;
+    }
     return op_state;
 }
 

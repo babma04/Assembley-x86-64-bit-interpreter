@@ -1,4 +1,4 @@
-#include "memory_eng.h"
+#include "../include/memory_eng.h"
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -111,9 +111,9 @@ int write_mem (uint64_t v_addr, uint8_t *data, size_t size, int create_page)
         uint8_t *physical_addr = decompose_address(v_addr, create_page);
         if (!physical_addr) return 1;
         *physical_addr = *data;
-        return 0;
     }
     else write_block(v_addr, data, size, create_page);
+    return 0;
 }
 
 /**
