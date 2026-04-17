@@ -21,8 +21,8 @@ typedef struct Operand Operand;
 // Operations Info structure
 typedef struct Info Info;
 
+// Instruction Map structure
 typedef struct InstructionMap InstructionMap;
-
 
 // ---------------------------------------------------
 // Aliases
