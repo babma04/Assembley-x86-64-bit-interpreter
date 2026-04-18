@@ -19,6 +19,7 @@ struct Info {
     char *instruction;
     Operand op1;
     Operand op2;
+    CPURegs *registers;
     Operand result;
 };
 
@@ -74,14 +75,14 @@ Info* create_operand_state ()
 /**
  * Sets the operand info in the structurer
  * 
- * @param current_instruction_state Pointer to the Info structure holding all operand, instruction and results info
+ * @param current_instruction_state Pointer to the Info structure holding all operand, instruction, registers and results info
  * @param operand Address for the sequence of charaters that define the operand to update
  * @param address Address of the operand if any
  * @param value Value of the given operand
  * @param size Number of bytes that the operand take
  * @param type Address for the sequence of characters that define the data type of this operands value
  */
-void get_operand_info(Info *current_instruction_state, char *operand, int address, int value, int size, char *op_type)
+void get_operand_info (Info *current_instruction_state, char *operand, int address, int value, int size, char *op_type)
 {
     if (operand != NULL && strcmp(operand, "op1") == 0 )
     {
@@ -100,21 +101,36 @@ void get_operand_info(Info *current_instruction_state, char *operand, int addres
 
 /**
  * Sets the current instruction in use
- * @param current_instruction_state Pointer to the Info structure holding all operand, instruction and results info
+ * @param current_instruction_state Pointer to the Info structure holding all operand, instruction, registers and results info
  * @param instruction Instruction to execute
  */
-void set_instruction(Info *current_instruction_state, char *instruction)
+void set_instruction (Info *current_instruction_state, char *instruction)
 {
     current_instruction_state->instruction = instruction;
 }
 
 /**
+ * Sets the register reference to use for operations
+ * @param current_state Pointer to the Info structure holding all operand, instruction result and registers info
+ * @param r Register structure holding all register info 
+ */ 
+void set_registers_ref (Info *current_state, CPURegs *r)
+{
+    current_state->registers = r;
+}
+
+/**
  * Resets all values in the structure to 0's
- * @param current_instruction_state Pointer to the Info structure holding all operand, instruction and results info
+ * @param current_instruction_state Pointer to the Info structure holding all operand, instruction, registers and results info
  */
 void clean(Info *current_instruction_state)
 {
     Info *tmp = malloc(sizeof(Info));
+    if (tmp == NULL)
+    {
+        printf ("Memory allocation error");
+        return Null;
+    }
     free(current_instruction_state);
     current_instruction_state = tmp;
 }
@@ -195,75 +211,32 @@ void set_result(Info *current_instruction_state)
 
 void exec_cmp(Info *s)
 {
-    return;
-}
+    // Need cmp syntax rules check
 
-void exec_jmp(Info *s)
-{
-    return;
-}
-
-void exec_jb(Info *s)
-{
-    return;
-}
-
-void exec_jl(Info *s)
-{
-    return;
-}
-
-void exec_ja(Info *s)
-{
-    return;
-}
-
-void exec_jg(Info *s)
-{
-    return;
-}
-
-void exec_je(Info *s)
-{
-    return;
-}
-
-void exec_jne(Info *s)
-{
-    return;
-}
-
-void exec_jz(Info *s)
-{
-    return;
-}
-
-void exec_js(Info *s)
-{
-    return;
-}
-
-void exec_jc(Info *s)
-{
-    return;
-}
-
-void exec_jo(Info *s)
-{
-    return;
+    s->result.value = s->op1.value - s->op2.value;
 }
 
 //----------------------
 // ALU Functions
 //----------------------
+
+/**
+ * Executes addition
+ */
 void exec_add(Info *s)
 {
-    return;
+    // Needs additions imolementation rules
+
+    s->result.value = s->op1.value + s->op2.value;
 }
 
+/**
+ * Executes carried addition
+ */
 void exec_adc(Info *s)
 {
-    return;
+    exec_add(s);
+    s->result.value += read_carry_flag(s->registers);
 }
 
 void exec_sub(Info *s)

@@ -2,6 +2,7 @@
 #define OPERATIONS_H
 
 #include "../include/memory_eng.h"
+#include "../include/registers.h"
 #include <string.h>
 #include <ctype.h>
 #include <stdint.h>
@@ -46,17 +47,6 @@ void free_pointer (Info* ptr);
 void dispatch(Info *current_instruction_state);
 // Data Path funtions prototypes
 void exec_cmp(Info *s);
-void exec_jmp(Info *s);
-void exec_jb(Info *s);
-void exec_jl(Info *s);
-void exec_ja(Info *s);
-void exec_jg(Info *s);
-void exec_je(Info *s);
-void exec_jne(Info *s);
-void exec_jz(Info *s);
-void exec_js(Info *s);
-void exec_jc(Info *s);
-void exec_jo(Info *s);
 // ALU funtions prototypes
 void exec_add(Info *s);
 void exec_adc(Info *s);
