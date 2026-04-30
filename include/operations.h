@@ -41,12 +41,15 @@ typedef void (*InstructionFunc)(Info *);
 Info* create_operand_state ();
 void get_operand_info(Info *current_instruction_state, char *operand, int address, int value, int size, char *op_type);
 void set_instruction(Info *current_instruction_state, char *instruction);
-void clean(Info *current_instruction_state);
+int clean(Info *current_instruction_state);
 void free_pointer (Info* ptr);
+
 // Instruction dispatching prototypes
 void dispatch(Info *current_instruction_state);
+
 // Data Path funtions prototypes
 void exec_cmp(Info *s);
+
 // ALU funtions prototypes
 void exec_add(Info *s);
 void exec_adc(Info *s);
@@ -60,9 +63,8 @@ void exec_xor(Info *s);
 void exec_not(Info *s);
 void exec_neg(Info *s);
 void exec_xchg(Info *s);
+
 // FPU funtions prototypes
 // (TODO)
-
-
 
 #endif // OPERATIONS_H

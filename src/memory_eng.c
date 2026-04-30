@@ -7,9 +7,9 @@
 static Table* CR3 = NULL;
 
 /**
- * Main MMU funion. 
- * Should initialize the Table structure if it's not yet created.
- * Used to handle reads and writes aswell as manage page creation if needed.
+ * @brief Main MMU funion. 
+ * * Should initialize the Table structure if it's not yet created.
+ * * Used to handle reads and writes aswell as manage page creation if needed.
  * 
  * @param v_addr Virtual address given by the caller
  * @param create_page Flags for the operation type (0 - for read; 1 - for write)
@@ -88,11 +88,11 @@ uint8_t *decompose_address (uint64_t v_addr, int create_page)
 
 
 /**
- * Writes bytes in memory.
- * Uses the decompose method to get the real address and writes the value onto the new address.
- * If the address returned is not NULL writes value on it, else returns without writing.
- * Handles page crossing by checking if the write stays within the 4KB boundary.
- * If the ammount of bytes to write is grater than one uses the write_block function to handle the write operation.
+ * @brief Writes bytes in memory.
+ * * Uses the decompose method to get the real address and writes the value onto the new address.
+ * * If the address returned is not NULL writes value on it, else returns without writing.
+ * * Handles page crossing by checking if the write stays within the 4KB boundary.
+ * * If the ammount of bytes to write is grater than one uses the write_block function to handle the write operation.
  * 
  * @param v_addr Virtual address given by the caller
  * @param data Pointer to the data to write
@@ -117,8 +117,9 @@ int write_mem (uint64_t v_addr, uint8_t *data, size_t size, int create_page)
 }
 
 /**
- * Writes a block of data to virtual memory.
- * Handles page crossing by checking if the write stays within the 4KB boundary.
+ * @brief Writes a block of data to virtual memory.
+ * * Handles page crossing by checking if the write stays within the 4KB boundary.
+ * 
  * @param v_addr Virtual address where the block should be written
  * @param data Pointer to the block of data to be written
  * @param size Size of the data block in bytes
@@ -150,11 +151,11 @@ int write_block (uint64_t v_addr, uint8_t *data, size_t size, int create_page)
 }
 
 /**
- * Reads bytes from virtual memory.
- * Uses the decompose method to get the real address and reads its value.
- * If the address returned is NULL returns 1 to signal a Segmentation Fault.
- * Handles page crossing by checking if the read stays within the 4KB boundary.
- * If the ammount of bytes to read is grater than one uses the read_block function to handle the read operation.
+ * @brief Reads bytes from virtual memory.
+ * * Uses the decompose method to get the real address and reads its value.
+ * * If the address returned is NULL returns 1 to signal a Segmentation Fault.
+ * * Handles page crossing by checking if the read stays within the 4KB boundary.
+ * * If the ammount of bytes to read is grater than one uses the read_block function to handle the read operation.
  * 
  * @param v_addr Virtual address given by the caller
  * @param buffer Pointer to the memory block where the result is expected to be given if it is found
@@ -176,8 +177,8 @@ int read_mem (uint64_t v_addr, uint8_t *buffer, size_t size)
 }
 
 /**
- * Reads a block of data from virtual memory.
- * Handles page crossing by checking if the read stays within the 4KB boundary.
+ * @brief Reads a block of data from virtual memory.
+ * * Handles page crossing by checking if the read stays within the 4KB boundary.
  * 
  * @param v_addr Virtual address where the block should be read from
  * @param buffer Pointer to the buffer where the read data should be stored

@@ -6,10 +6,11 @@
 
 // Structure for each alu operand's necessary info
 struct Operand{
-    int address;
-    int value;
-    int size; // 1,2,4,8
+    long long address;
+    long long value;
+    char size; // 1,2,4,8
     char *op_type;
+    char visual_rep; // 1 for text, 0 for numerical
 };
 
 // To be implemented a fpu operand struct
@@ -35,11 +36,8 @@ struct InstructionMap {
 
 // Lookup table to match string instructions with c funtions
 InstructionMap dispatch_table[] = {
-    // Data Path
-    {"cmp",  exec_cmp},  {"jmp",  exec_jmp},  {"jb",   exec_jb},
-    {"jl",   exec_jl},   {"ja",   exec_ja},   {"jg",   exec_jg},
-    {"je",   exec_je},   {"jne",  exec_jne},  {"jz",   exec_jz},
-    {"js",   exec_js},   {"jc",   exec_jc},   {"jo",   exec_jo},
+    // Data Path (compare)
+    {"cmp",  exec_cmp},
 
     // ALU
     {"add",  exec_add},  {"adc",  exec_adc},  {"sub",  exec_sub},
@@ -58,7 +56,7 @@ InstructionMap dispatch_table[] = {
 // --------------------------------------------------------------------------------
 
 /**
- * Creates a pointer to the operand Info structure and returns it
+ * @brief Creates a pointer to the operand Info structure and returns it.
  */
 Info* create_operand_state ()
 {
@@ -73,16 +71,17 @@ Info* create_operand_state ()
 }
 
 /**
- * Sets the operand info in the structurer
+ * @brief Sets the operand info in the structurer.
  * 
  * @param current_instruction_state Pointer to the Info structure holding all operand, instruction, registers and results info
  * @param operand Address for the sequence of charaters that define the operand to update
- * @param address Address of the operand if any
- * @param value Value of the given operand
- * @param size Number of bytes that the operand take
+ * @param address 64 bit long Address of the operand if any
+ * @param value 64 bit long Value of the given operand
+ * @param size Number of bytes that the operand take (number of bytes as a char)
  * @param type Address for the sequence of characters that define the data type of this operands value
+ * @param visual_rep Visual representation it should have (0 for string representation, 1 for numerial representation)
  */
-void get_operand_info (Info *current_instruction_state, char *operand, int address, int value, int size, char *op_type)
+void get_operand_info (Info *current_instruction_state, char *operand, long long address, long long value, char size, char *op_type, char visual_rep)
 {
     if (operand != NULL && strcmp(operand, "op1") == 0 )
     {
@@ -90,17 +89,21 @@ void get_operand_info (Info *current_instruction_state, char *operand, int addre
         current_instruction_state->op1.value = value;
         current_instruction_state->op1.size = size;
         current_instruction_state->op1.op_type = op_type;
+        current_instruction_state->op1.visual_rep = visual_rep;
     } else
     {
         current_instruction_state->op2.address = address;
         current_instruction_state->op2.value = value;
         current_instruction_state->op2.size = size;
         current_instruction_state->op2.op_type = op_type;
+        current_instruction_state->op2.visual_rep = visual_rep;
+
     }
 }
 
 /**
- * Sets the current instruction in use
+ * @brief Sets the current instruction in use.
+ * 
  * @param current_instruction_state Pointer to the Info structure holding all operand, instruction, registers and results info
  * @param instruction Instruction to execute
  */
@@ -110,7 +113,8 @@ void set_instruction (Info *current_instruction_state, char *instruction)
 }
 
 /**
- * Sets the register reference to use for operations
+ * @brief Sets the register reference to use for operations.
+ * 
  * @param current_state Pointer to the Info structure holding all operand, instruction result and registers info
  * @param r Register structure holding all register info 
  */ 
@@ -120,24 +124,28 @@ void set_registers_ref (Info *current_state, CPURegs *r)
 }
 
 /**
- * Resets all values in the structure to 0's
+ * @brief Resets all values in the structure to 0's.
+ * 
  * @param current_instruction_state Pointer to the Info structure holding all operand, instruction, registers and results info
+ * @return -1 if a memory allocation failed, 0 as a successful exit code
  */
-void clean(Info *current_instruction_state)
+int clean(Info *current_instruction_state)
 {
     Info *tmp = malloc(sizeof(Info));
     if (tmp == NULL)
     {
         printf ("Memory allocation error");
-        return Null;
+        return -1;
     }
     free(current_instruction_state);
     current_instruction_state = tmp;
+    return 0;
 }
 
 /**
- * Frees up the pointer from memory
- * Mainly for integration with python
+ * @brief Frees up the pointer from memory.
+ * * Mainly for integration with python
+ * 
  * @param ptr Pointer to free
  */
 void free_pointer (Info* ptr)
@@ -150,8 +158,8 @@ void free_pointer (Info* ptr)
 //--------------------------------
 
 /**
- * Instruction dispatcher using the lookup table in InstructionMap.
- * Calls the funtion associated to the instruction string.
+ * @brief Instruction dispatcher using the lookup table in InstructionMap.
+ * * Calls the funtion associated to the instruction string.
  * 
  * @param current_state Pointer to the Info structure holding all operand, instruction and results info
  */
@@ -174,7 +182,7 @@ void dispatch(Info *current_instruction_state)
 // ---------------------------
 
 /**
- * Reads the result of the current instruction execution and returns it if it's a register, otherwise returns -1
+ * @brief Reads the result of the current instruction execution and returns it if it's a register, otherwise returns -1.
  * 
  * @param current_instruction_state Pointer to the Info structure holding all operand, instruction and results info
  * @return int Result of the instruction execution if it's a register, otherwise -1
@@ -190,7 +198,7 @@ int read_result(Info *current_instruction_state)
 }
 
 /**
- * Writes the result of the current instruction execution if it's a memory address and cleans the current instruction state structure
+ * @brief Writes the result of the current instruction execution if it's a memory address and cleans the current instruction state structure.
  * 
  * @param current_instruction_state Pointer to the Info structure holding all operand, instruction and results info
  * @warning If the result is not a memory address does nothing
@@ -288,5 +296,4 @@ void exec_xchg(Info *s)
 {
     return;
 }
-
 
