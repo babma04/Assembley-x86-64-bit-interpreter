@@ -124,6 +124,20 @@ void set_registers_ref (Info *current_state, CPURegs *r)
 }
 
 /**
+ * @brief Sets the information about the result based on the operators info.
+ * * Leaves the result value non alterated to be set by the operation called.
+ * 
+ * @param current_state Pointer to the Info structure holding all operand, instruction result and registers info
+ */
+void set_result_info (Info *current_state)
+{
+    current_state->result.op_type = current_state->op1.op_type;
+    current_state->result.size = current_state->op1.size;
+    current_state->result.address = current_state->op1.address;
+    current_state->result.visual_rep = (current_state->op1.visual_rep || current_state->op2.visual_rep);
+}
+
+/**
  * @brief Resets all values in the structure to 0's.
  * 
  * @param current_instruction_state Pointer to the Info structure holding all operand, instruction, registers and results info
@@ -166,6 +180,8 @@ void free_pointer (Info* ptr)
 void dispatch(Info *current_instruction_state)
 {
     if (!current_instruction_state->instruction) return;
+
+    set_result_info(current_instruction_state);
     
     for (int i = 0; i < TABLE_SIZE; i++) {
         if (strcmp(current_instruction_state->instruction, dispatch_table[i].instruction) == 0) {
@@ -175,6 +191,8 @@ void dispatch(Info *current_instruction_state)
     }
     // Should never be reached as in this point the instruction has already been validated
     printf("Error: Unknown instruction %s\n", current_instruction_state->instruction);
+    // Safety for if an operation is ends in an error
+    clean(current_instruction_state);
 }
 
 // ---------------------------

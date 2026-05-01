@@ -39,8 +39,10 @@ typedef void (*InstructionFunc)(Info *);
 
 // Operand management prototypes
 Info* create_operand_state ();
-void get_operand_info(Info *current_instruction_state, char *operand, int address, int value, int size, char *op_type);
+void get_operand_info (Info *current_instruction_state, char *operand, long long address, long long value, char size, char *op_type, char visual_rep);
 void set_instruction(Info *current_instruction_state, char *instruction);
+void set_registers_ref (Info *current_state, CPURegs *r);
+void set_result_info (Info *current_state);
 int clean(Info *current_instruction_state);
 void free_pointer (Info* ptr);
 

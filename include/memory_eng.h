@@ -16,10 +16,6 @@ typedef struct {
     void *entries[MAX_PAGES];
 } Table;
 
-// --- Core MMU Functions ---
-// Used to decompose a virtual address into a physical address, and to read/write memory
-uint8_t *decompose_address(uint64_t v_addr, int create_page);
-
 // Single-byte interface
 int write_mem(uint64_t v_addr, uint8_t *data, size_t size, int create_page);
 int read_mem(uint64_t v_addr, uint8_t *result, size_t size);
