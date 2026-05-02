@@ -235,11 +235,48 @@ void set_result(Info *current_instruction_state)
 // Data Path Functions
 //----------------------
 
+/**
+ * @brief Universal function to update the flags after an operation based on the result of the operation and the operands info.
+ * 
+ * @param s Pointer to the Info structure holding all operand, instruction and results info
+ * @param result The result of the operation of the two operands, used to set the flags
+ */
+void flags_update(Info *s, unsigned long long result)
+{
+    int bit_count = 8 * s->op1.size;
+    int msb_mask = bit_count - 1;
+    unsigned long long bits_mask = (1ULL << bit_count) - 1;
+    unsigned long long res_msb = result & bits_mask;
+
+    // Aritmetic flags
+    uint8_t zero = (uint8_t) (res_msb == 0);
+    uint8_t sign = (uint8_t) ((res_msb >> (bit_count - 1)) & 1);
+
+    // Logical flags
+    uint8_t carry = (uint8_t) ((result >> bit_count) & 1);
+    uint8_t overflow = (uint8_t) (((s->op1.value ^ result) & (s->op2.value ^ result)) >> msb_mask & 1);
+
+    // More flags can be later implemented as needed
+
+    // Preserving the state of the trap flag as it is not affected by the operations
+    uint8_t trap = (uint8_t) read_trap_flag(s->registers);
+
+    uint32_t rflags_value = (carry << 0) | (zero << 6) | (sign << 7) | (overflow << 11) | (trap << 8);
+    write_rflags(s->registers, rflags_value);
+}
+
+/**
+ * @brief Executes the compare instruction, which is a subtraction that only updates the flags and does not store the result.
+ * 
+ * @param s Pointer to the Info structure holding all operand, instruction and results info
+ * @warning The result of the subtraction is not stored, only the flags are updated based on the result of the operation
+ */
 void exec_cmp(Info *s)
 {
     // Need cmp syntax rules check
-
-    s->result.value = s->op1.value - s->op2.value;
+    unsigned long long result = (unsigned long long) s->op1.value - s->op2.value;
+    // Sets flags based on the result
+    flags_update(s, result);
 }
 
 //----------------------
@@ -247,71 +284,160 @@ void exec_cmp(Info *s)
 //----------------------
 
 /**
- * Executes addition
+ * @brief Executes uncarried addition
+ * 
+ * @param s Pointer to the Info structure holding all operand, instruction and results info
+ * @warning The result of the addition is stored in the result field of the Info structure and the flags are updated based on the result of the operation
  */
 void exec_add(Info *s)
 {
-    // Needs additions imolementation rules
-
-    s->result.value = s->op1.value + s->op2.value;
+    unsigned long long result = (unsigned long long) s->op1.value + s->op2.value;
+    flags_update(s, result);
+    s->result.value = (long long) result;
 }
 
 /**
- * Executes carried addition
+ * @brief Executes carried addition 
+ * 
+ * @param s Pointer to the Info structure holding all operand, instruction and results info
+ * @warning The result of the addition is stored in the result field of the Info structure and the flags are updated based on the result of the operation
  */
 void exec_adc(Info *s)
 {
-    exec_add(s);
-    s->result.value += read_carry_flag(s->registers);
+    unsigned long long result = (unsigned long long) s->op1.value + s->op2.value + read_carry_flag(s->registers);
+    flags_update(s, result);
+    s->result.value = (long long) result;
 }
 
+/**
+ * @brief Executes uncarried subtraction
+ * 
+ * @param s Pointer to the Info structure holding all operand, instruction and results info
+ * @warning The result of the subtraction is stored in the result field of the Info structure and the flags are updated based on the result of the operation
+ */
 void exec_sub(Info *s)
 {
-    return;
+    unsigned long long result = (unsigned long long) s->op1.value - s->op2.value;
+    flags_update(s, result);
+    s->result.value = (long long) result;
 }
 
+/**
+ * @brief Executes carried subtraction
+ * 
+ * @param s Pointer to the Info structure holding all operand, instruction and results info
+ * @warning The result of the subtraction is stored in the result field of the Info structure and the flags are updated based on the result of the operation
+ */
 void exec_sbb(Info *s)
 {
-    return;
+    unsigned long long result = (unsigned long long) s->op1.value - s->op2.value - read_carry_flag(s->registers);
+    flags_update(s, result);
+    s->result.value = (long long) result;
 }
 
+/**
+ * @brief Executes the increment instruction, which adds 1 to the operand and updates the flags based on the result.
+ * 
+ * @param s Pointer to the Info structure holding all operand, instruction and results info
+ * @warning The result of the increment is stored in the result field of the Info structure and the flags are updated based on the result of the operation
+ */
 void exec_inc(Info *s)
 {
-    return;
+    unsigned long long result = (unsigned long long) s->op1.value + 1;
+    flags_update(s, result);
+    s->result.value = (long long) result;
 }
 
+/**
+ * @brief Executes the decrement instruction, which subtracts 1 from the operand and updates the flags based on the result.
+ * 
+ * @param s Pointer to the Info structure holding all operand, instruction and results info
+ * @warning The result of the decrement is stored in the result field of the Info structure and the flags are updated based on the result of the operation
+ */
 void exec_dec(Info *s)
 {
-    return;
+    unsigned long long result = (unsigned long long) s->op1.value - 1;
+    flags_update(s, result);
+    s->result.value = (long long) result;
 }
 
+/**
+ * @brief Executes the bitwise AND instruction, which performs a bitwise AND operation between the two operands and updates the flags based on the result.
+ * 
+ * @param s Pointer to the Info structure holding all operand, instruction and results info
+ * @warning The result of the AND operation is stored in the result field of the Info structure and the flags are updated based on the result of the operation
+ */
 void exec_and(Info *s)
 {
-    return;
+    unsigned long long result = (unsigned long long) s->op1.value & s->op2.value;
+    flags_update(s, result);
+    s->result.value = (long long) result;
 }
 
+/**
+ * @brief Executes the bitwise OR instruction, which performs a bitwise OR operation between the two operands and updates the flags based on the result.
+ *  
+ * @param s Pointer to the Info structure holding all operand, instruction and results info
+ * @warning The result of the OR operation is stored in the result field of the Info structure and the flags are updated based on the result of the operation
+ */
 void exec_or(Info *s)
 {
-    return;
+    unsigned long long result = (unsigned long long) s->op1.value | s->op2.value;
+    flags_update(s, result);
+    s->result.value = (long long) result;
 }
 
+/**
+ * @brief Executes the bitwise XOR instruction, which performs a bitwise XOR operation between the two operands and updates the flags based on the result.
+ * 
+ * @param s Pointer to the Info structure holding all operand, instruction and results info
+ * @warning The result of the XOR operation is stored in the result field of the Info structure and the flags are updated based on the result of the operation
+ */
 void exec_xor(Info *s)
 {
-    return;
+    unsigned long long result = (unsigned long long) s->op1.value ^ s->op2.value;
+    flags_update(s, result);
+    s->result.value = (long long) result;
 }
 
+/**
+ * @brief Executes the bitwise NOT instruction, which performs a bitwise NOT operation on the operand and updates the flags based on the result.
+ * 
+ * @param s Pointer to the Info structure holding all operand, instruction and results info
+ * @warning The result of the NOT operation is stored in the result field of the Info structure and the flags are updated based on the result of the operation
+ */
 void exec_not(Info *s)
 {
-    return;
+    unsigned long long result = (unsigned long long) ~s->op1.value;
+    flags_update(s, result);
+    s->result.value = (long long) result;
 }
 
+/**
+ * @brief Executes the NEG instruction, which negates the operand and updates the flags based on the result.
+ * 
+ * @param s Pointer to the Info structure holding all operand, instruction and results info
+ * @warning The result of the NEG operation is stored in the result field of the Info structure and the flags are updated based on the result of the operation
+ */
 void exec_neg(Info *s)
 {
-    return;
+    unsigned long long result = (unsigned long long) -s->op1.value;
+    flags_update(s, result);
+    s->result.value = (long long) result;
 }
 
+/**
+ * @brief Executes the XCHG instruction, which exchanges the values of the two operands without updating the flags.
+ * 
+ * @param s Pointer to the Info structure holding all operand, instruction and results info
+ * @warning The result of the XCHG operation is stored in the op1 and op2 fields of the Info structure and the flags are not updated based on the result of the operation
+ */
 void exec_xchg(Info *s)
 {
-    return;
+    unsigned long long temp = s->op1.value;
+    s->op1.value = s->op2.value;
+    s->op2.value = temp;
+
+    // Requires to set the result info based on the new op1 value as it is the one that will be written back to memory or register
 }
 
