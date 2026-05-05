@@ -29,7 +29,7 @@ typedef struct InstructionMap InstructionMap;
 // Aliases
 // ---------------------------------------------------
 
-// Standard instruction funtion signature alias
+// Standard instruction function signature alias
 typedef void (*InstructionFunc)(Info *);
 
 
@@ -49,10 +49,10 @@ void free_pointer (Info* ptr);
 // Instruction dispatching prototypes
 void dispatch(Info *current_instruction_state);
 
-// Data Path funtions prototypes
+// Data Path functions prototypes
 void exec_cmp(Info *s);
 
-// ALU funtions prototypes
+// ALU functions prototypes
 void exec_add(Info *s);
 void exec_adc(Info *s);
 void exec_sub(Info *s);
@@ -66,7 +66,7 @@ void exec_not(Info *s);
 void exec_neg(Info *s);
 void exec_xchg(Info *s);
 
-// FPU funtions prototypes
+// FPU functions prototypes
 // (TODO)
 
 #endif // OPERATIONS_H

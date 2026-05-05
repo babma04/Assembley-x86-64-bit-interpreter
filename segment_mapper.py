@@ -14,7 +14,7 @@ class Segment_Mapper:
     Provides methods to load program sections (.text, .data, .rodata, .bss) and constants.
     Initializes the stack with argc and argv values.\n
     If any syntax errors or critical issues are found during parsing, the program exits gracefully with appropriate error messages.\n
-    All segment addresses are stored in respeive dictionaries for easy access during execution. Actuall values are stored in Data_Memory object on appropriate addresses.\n
+    All segment addresses are stored in respective dictionaries for easy access during execution. Actual values are stored in Data_Memory object on appropriate addresses.\n
     Author: João Carilho Louro
 
     :param file_name: Path to the assembly file
@@ -58,7 +58,7 @@ class Segment_Mapper:
     WORD_OR_CHARACTERS_PATTERN = r'(\".*?\"|\'.*?\')'
     IMMEDIATE_VALUE_PATTERN = fr'({NUMBER_REPRESENTATION_PATTERN}|{WORD_OR_CHARACTERS_PATTERN})'
     
-    # Architecture Constants for sections start
+    # Architecture Constants for sections start and memory allocation
     TEXT_BASE = 0x400000
     RODATA_BASE = 0x500000
     DATA_BASE = 0x600000
@@ -67,22 +67,53 @@ class Segment_Mapper:
 
 
     def __init__(self, file_name: str, argvcount: int = 0, argv: list[str] | None = None, validation_file_name: str = "valid_instructions.json", stack_limit: int = 0x7fff00000000) -> None:
+        """
+        Initializes the Segment_Mapper by loading the assembly file, parsing its sections, and setting up memory segments and stack.
+
+        :param file_name: Path to the assembly file
+        :type file_name: str
+        :param argvcount: Number of command line arguments
+        :type argvcount: int
+        :param argv: List of command line arguments
+        :type argv: list[str] | None
+        :param stack_limit: Minimum allowed value for the stack pointer
+        :type stack_limit: int
+        :return: None
+        """
+        # ------------------------
+        # Constraints definitions 
+        # ------------------------
+
+        # Stack limit setting
         self.stack_limit :int = stack_limit
-        # Memory used in the execution of the program
-        self.memory_list :list[list[str]]= []
         # Requires a 'start' label to be changed or will quit the program
         self.valid_start: str = Storage.read_valid_start(validation_file_name)
         # Value will be changed while parsing .text section
         self.rip: int = -1 # default invalid value
+
+
+        # ---------------
+        # Info holders
+        # ---------------
+
+        # File name holder (After conversion to a parsable json file)
+        self.file_name: str = Storage.convert_to_json(file_name)
+
+        # Memory used in the execution of the program
+        self.memory_list :list[list[str]]= []
+        
+        #(CURRENT UPDATE WILL MAKE THIS OBSOLETE)
         # Should only store addresses as actually memory values are stored in Data_Memory class
         self.rodata_segment: DataSectionInfo = {}
         self.data_segment: DataSectionInfo = {}
         self.bss_segment: BssSectionInfo = {}
+
         self.labels: LabelMap = {}
         self.constants: ConstantMap = {}     # Stores constant values
 
-        self.file_name: str = Storage.convert_to_json(file_name)
         self.memory: Data_Memory = self.load_program(self.file_name)
+        
+        # Writes the stack in memory (Currently also uses the paging system but might be changed in to a stack system)
         self.stack_pointer: int = self.initialize_stack(argvcount, argv, self.memory, self.stack_limit)
         self.parse_section()
 
@@ -92,12 +123,12 @@ class Segment_Mapper:
     def load_program(self, file_name: str) -> Data_Memory:
         """
         Loads the program into 'usable memory' and loads
-        a json file with each line of relevante code properly seperated
+        a json file with each line of relevant code properly separated
         into tokens of a list.
         
         :param file_name: name of the file to load
         :type file_name: str
-        :return: Data_Memory object used to hold constents of labels 
+        :return: Data_Memory object used to hold contents of labels 
         :rtype: Data_Memory
         """
         program_lines: list[str] = Storage.load_file_lines(file_name)
@@ -168,7 +199,7 @@ class Segment_Mapper:
 
     def load_data(self, current_rip: Address, index: int, section: str) -> Address:
         """
-        Takes care of .data and .rodata conponents parsing as well as validation of the declarations format.
+        Takes care of .data and .rodata components parsing as well as validation of the declarations format.
 
         :param current_rip: pointer to the Address in use to store values in the Data_memory object
         :param index: number of the line being parsed
@@ -389,7 +420,7 @@ class Segment_Mapper:
 
     def load_text(self, current_rip: Address ,index: int) -> None:               
         """
-        Takes care of .text conponents (methods labels and constants) parsing as well as validation of the start declaration
+        Takes care of .text components (methods labels and constants) parsing as well as validation of the start declaration
         
         :param current_rip: pointer to the Address in use to store values in the Data_memory object
         :type current_rip: Address
@@ -409,7 +440,7 @@ class Segment_Mapper:
     
     def find_start(self, line: list[str], next_line: list[str]) -> int:
         """
-        Validates the existance of a valid start declaration
+        Validates the existence of a valid start declaration
 
         :param line: List of words of a line of code where a start declaration is expected
         :type line: list[str]
@@ -430,7 +461,7 @@ class Segment_Mapper:
         Takes care of the label initialization with all labels present in the code passed to the execution.\n
         Also verifies if any of the lines is a constant declaration and redirects the execution to the appropriate method
 
-        :param index: starting line (Must have a global satrt declaration)
+        :param index: starting line (Must have a global start declaration)
         :type index: int
         """
 
@@ -563,7 +594,7 @@ class Segment_Mapper:
         :type value: str
         :return: value of the constant (int or str)
         :rtype: int | str
-        :raises ValueError: If an invalid constant declaraion is detected
+        :raises ValueError: If an invalid constant declaration is detected
         """
         if re.match(r'^\d+$', value):
             return int(value)
@@ -680,11 +711,11 @@ class Segment_Mapper:
     @staticmethod
     def is_constant(line: list[str]) -> bool:
         """
-        Verifies if a given line is a declaratees a constant
+        Verifies if a given line declares a constant
 
         :param line: full line of code in execution
         :type line: list[str]
-        :return: True if the line defines a constant, False if it doens't
+        :return: True if the line defines a constant, False if it doesn't
         :rtype: bool
         """
         return "equ" in line or "EQU" in line
@@ -696,7 +727,7 @@ class Segment_Mapper:
 
         :param line: full line of code in execution
         :type line: list[str]
-        :return: True if the line has a size calculation formula, False if it doens't
+        :return: True if the line has a size calculation formula, False if it doesn't
         :rtype: bool
         """
         for kword in line:

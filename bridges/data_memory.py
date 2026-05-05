@@ -77,7 +77,7 @@ class Data_Memory:
         Uses a helper function to ensure that the data being written has the correct number of bytes for the specified size, padding with zeros if necessary.
         Has a flag to indicate if pages should be created if they don't exist, which affects the behavior of the write operation in case of unmapped addresses.
         
-        :param addr: address to start writting to.
+        :param addr: address to start writing to.
         :type addr: int
         :param size: size of the data to write: [1,2,4,8] bytes
         :type size: int
@@ -97,9 +97,9 @@ class Data_Memory:
     def valid_data_length(self, data: bytes, size: int) -> bool:
         """
         Verifies if the length of the data is valid for the size attributed to the write call.\n
-        Tries to prevent errors in writing when there are not enought elements in the data variable for the number of bytes to write.
+        Tries to prevent errors in writing when there are not enough elements in the data variable for the number of bytes to write.
 
-        :param data: Byte representatuion of the data to write.
+        :param data: Byte representation of the data to write.
         :type data: bytes
         :param size: Number of bytes to write
         :type size: int
@@ -111,13 +111,13 @@ class Data_Memory:
     def get_valid_data(self, data: bytes, size: int) -> bytes:
         """
         Returns a copy of data with the correct amount of explicit bytes.\n
-        If any bytes are not explicitly writen, writes them as a 0 at the end of the data, for each missing bytes.
+        If any bytes are not explicitly written, writes them as a 0 at the end of the data, for each missing bytes.
 
-        :param data: Byte representatuion of the data to write.
+        :param data: Byte representation of the data to write.
         :type data: bytes
         :param size: Number of bytes to write
         :type size: int
-        :return: Full data with all implicite bytes writen out 
+        :return: Full data with all implicit bytes written out 
         :rtype: bytes
         """
         return data[:size].ljust(size, b'\x00')
@@ -158,7 +158,7 @@ class Data_Memory:
         
         :return: current value at the top of the stack
         :type: bytes
-        :raises MemoryError: If the stack underflows (i.e., if the stack pointer goes above the stack start address)
+        :raises MemoryError: If the stack underflow's (i.e., if the stack pointer goes above the stack start address)
         """
         rsp = self.registers.read_reg('rsp')
         # Check for stack underflow before popping

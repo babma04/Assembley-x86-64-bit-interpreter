@@ -3,13 +3,23 @@
 #include <stdlib.h>
 #include <string.h>
 
+// --- Constants ---
+#define PAGE_SIZE 4096  // 4kb per page
+#define MAX_PAGES 512 // 512 * 8 bytes per entry = 4kb tables
+
+// --- Structures ---
+// Structure definition of the Table of pages of data
+typedef struct {
+    void *entries[MAX_PAGES];
+} Table;
+
 // Initializing Table at NULL and rewrite it as needed using the PML4 reg
 static Table* CR3 = NULL;
 
 /**
  * @brief Main MMU funion. 
  * * Should initialize the Table structure if it's not yet created.
- * * Used to handle reads and writes aswell as manage page creation if needed.
+ * * Used to handle reads and writes as well as manage page creation if needed.
  * 
  * @param v_addr Virtual address given by the caller
  * @param create_page Flags for the operation type (0 - for read; 1 - for write)
@@ -27,7 +37,7 @@ uint8_t *decompose_address (uint64_t v_addr, int create_page)
         CR3 = (Table*)calloc(1, sizeof(Table));
     }
 
-    // Table index and offset extration:
+    // Table index and offset extraction:
     // Extracts the first 9 bits of the address
     uint64_t pml4 = (v_addr >> 39) & 0x1FF;
     // Extracts the 9 following bits
@@ -92,7 +102,7 @@ uint8_t *decompose_address (uint64_t v_addr, int create_page)
  * * Uses the decompose method to get the real address and writes the value onto the new address.
  * * If the address returned is not NULL writes value on it, else returns without writing.
  * * Handles page crossing by checking if the write stays within the 4KB boundary.
- * * If the ammount of bytes to write is grater than one uses the write_block function to handle the write operation.
+ * * If the amount of bytes to write is grater than one uses the write_block function to handle the write operation.
  * 
  * @param v_addr Virtual address given by the caller
  * @param data Pointer to the data to write
@@ -155,7 +165,7 @@ int write_block (uint64_t v_addr, uint8_t *data, size_t size, int create_page)
  * * Uses the decompose method to get the real address and reads its value.
  * * If the address returned is NULL returns 1 to signal a Segmentation Fault.
  * * Handles page crossing by checking if the read stays within the 4KB boundary.
- * * If the ammount of bytes to read is grater than one uses the read_block function to handle the read operation.
+ * * If the amount of bytes to read is grater than one uses the read_block function to handle the read operation.
  * 
  * @param v_addr Virtual address given by the caller
  * @param buffer Pointer to the memory block where the result is expected to be given if it is found

@@ -15,7 +15,7 @@ struct Operand{
 
 // To be implemented a fpu operand struct
 
-// Structure for all necessaryu instruction info
+// Structure for all necessary instruction info
 struct Info {
     char *instruction;
     Operand op1;
@@ -34,7 +34,7 @@ struct InstructionMap {
 // Lookup Table
 // --------------------------------------------------------------------------------
 
-// Lookup table to match string instructions with c funtions
+// Lookup table to match string instructions with c functions
 InstructionMap dispatch_table[] = {
     // Data Path (compare)
     {"cmp",  exec_cmp},
@@ -52,7 +52,7 @@ InstructionMap dispatch_table[] = {
 #define TABLE_SIZE (sizeof(dispatch_table) / sizeof(InstructionMap))
 
 // --------------------------------------------------------------------------------
-// Operand fetching, setting and cleaning funtions
+// Operand fetching, setting and cleaning functions
 // --------------------------------------------------------------------------------
 
 /**
@@ -71,15 +71,15 @@ Info* create_operand_state ()
 }
 
 /**
- * @brief Sets the operand info in the structurer.
+ * @brief Sets the operand info in the structure.
  * 
  * @param current_instruction_state Pointer to the Info structure holding all operand, instruction, registers and results info
- * @param operand Address for the sequence of charaters that define the operand to update
+ * @param operand Address for the sequence of characters that define the operand to update
  * @param address 64 bit long Address of the operand if any
  * @param value 64 bit long Value of the given operand
  * @param size Number of bytes that the operand take (number of bytes as a char)
  * @param type Address for the sequence of characters that define the data type of this operands value
- * @param visual_rep Visual representation it should have (0 for string representation, 1 for numerial representation)
+ * @param visual_rep Visual representation it should have (0 for string representation, 1 for numerical representation)
  */
 void get_operand_info (Info *current_instruction_state, char *operand, long long address, long long value, char size, char *op_type, char visual_rep)
 {
@@ -125,7 +125,7 @@ void set_registers_ref (Info *current_state, CPURegs *r)
 
 /**
  * @brief Sets the information about the result based on the operators info.
- * * Leaves the result value non alterated to be set by the operation called.
+ * * Leaves the result value non altered to be set by the operation called.
  * 
  * @param current_state Pointer to the Info structure holding all operand, instruction result and registers info
  */
@@ -168,12 +168,12 @@ void free_pointer (Info* ptr)
 }
 
 //--------------------------------
-// Instruction execution funtions
+// Instruction execution functions
 //--------------------------------
 
 /**
  * @brief Instruction dispatcher using the lookup table in InstructionMap.
- * * Calls the funtion associated to the instruction string.
+ * * Calls the function associated to the instruction string.
  * 
  * @param current_state Pointer to the Info structure holding all operand, instruction and results info
  */
@@ -196,7 +196,7 @@ void dispatch(Info *current_instruction_state)
 }
 
 // ---------------------------
-// Result management funtions
+// Result management functions
 // ---------------------------
 
 /**
@@ -248,7 +248,7 @@ void flags_update(Info *s, unsigned long long result)
     unsigned long long bits_mask = (1ULL << bit_count) - 1;
     unsigned long long res_msb = result & bits_mask;
 
-    // Aritmetic flags
+    // Arithmetic flags
     uint8_t zero = (uint8_t) (res_msb == 0);
     uint8_t sign = (uint8_t) ((res_msb >> (bit_count - 1)) & 1);
 
@@ -284,7 +284,7 @@ void exec_cmp(Info *s)
 //----------------------
 
 /**
- * @brief Executes uncarried addition
+ * @brief Executes non carried addition
  * 
  * @param s Pointer to the Info structure holding all operand, instruction and results info
  * @warning The result of the addition is stored in the result field of the Info structure and the flags are updated based on the result of the operation
@@ -310,7 +310,7 @@ void exec_adc(Info *s)
 }
 
 /**
- * @brief Executes uncarried subtraction
+ * @brief Executes non carried subtraction
  * 
  * @param s Pointer to the Info structure holding all operand, instruction and results info
  * @warning The result of the subtraction is stored in the result field of the Info structure and the flags are updated based on the result of the operation

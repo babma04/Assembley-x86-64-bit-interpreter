@@ -11,3 +11,9 @@ __pycache__/
 
 # OS specific
 .DS_Store
+
+# IDE specific
+.vscode/
+.idea/
+
+NVIM FOR THE WIN
