@@ -8,13 +8,29 @@
 #define MAX_PAGES 512 // 512 * 8 bytes per entry = 4kb tables
 
 // --- Structures ---
-// Structure definition of the Table of pages of data
-typedef struct {
+struct Table {
     void *entries[MAX_PAGES];
-} Table;
+};
 
-// Initializing Table at NULL and rewrite it as needed using the PML4 reg
-static Table* CR3 = NULL;
+
+/**
+ * @brief Initializes the pointer to the first level of the paging structure (PML4)
+ * * Allocates memory for a Table structure and initializes it to zero.
+ * * Returns a pointer to the initialized Table structure.
+ * @return Pointer to the initialized Table structure, or NULL if memory allocation fails
+ * @warning This function should be called before any memory access operations to ensure that the paging structure is properly initialized.
+ * * If memory allocation fails, the function will return NULL, and subsequent memory access operations will not be possible until the issue is resolved.
+ */
+Table* table_init()
+{
+    Table* table = (Table*)calloc(1, sizeof(Table));
+    if (!table) {
+        printf ("Failed memory allocation for table initializer!\n Major error detected, exiting...\n");
+        return NULL;
+    }
+    return table;
+}
+
 
 /**
  * @brief Main MMU funion. 
@@ -26,7 +42,7 @@ static Table* CR3 = NULL;
  * @return Pointer to the physical byte, or NULL if unmapped and create_page is 0
  * @note create_page param affects directly Table structures creation permission. 
  */
-uint8_t *decompose_address (uint64_t v_addr, int create_page)
+uint8_t *decompose_address (Table *CR3, uint64_t v_addr, int create_page)
 {
     // If the page_dir_root is not yet initialized initialize it
     if (!CR3)
@@ -114,15 +130,15 @@ uint8_t *decompose_address (uint64_t v_addr, int create_page)
  * If set to 0, the function will not create new pages and will return without writing if the target page does not exist. 
  * If set to 1, the function will create new pages as needed to accommodate the write operation.
  */
-int write_mem (uint64_t v_addr, uint8_t *data, size_t size, int create_page)
+int write_mem (Table* table, uint64_t v_addr, uint8_t *data, size_t size, int create_page)
 {
     if (size == 1)
     {
-        uint8_t *physical_addr = decompose_address(v_addr, create_page);
+        uint8_t *physical_addr = decompose_address(table, v_addr, create_page);
         if (!physical_addr) return 1;
         *physical_addr = *data;
     }
-    else write_block(v_addr, data, size, create_page);
+    else write_block(table, v_addr, data, size, create_page);
     return 0;
 }
 
@@ -140,13 +156,13 @@ int write_mem (uint64_t v_addr, uint8_t *data, size_t size, int create_page)
  * If set to 0, the function will not create new pages and will return without writing if the target page does not exist. 
  * If set to 1, the function will create new pages as needed to accommodate the write operation.
  */
-int write_block (uint64_t v_addr, uint8_t *data, size_t size, int create_page)
+int write_block (Table* table, uint64_t v_addr, uint8_t *data, size_t size, int create_page)
 {
     size_t written = 0;
     while (written < size)
     {
         uint64_t current_addr = v_addr + written;
-        uint8_t *physical_addr = decompose_address(current_addr, create_page);
+        uint8_t *physical_addr = decompose_address(table, current_addr, create_page);
         // If the physical address could not be read because of a Segmentation Fault return without writing
         if (!physical_addr) return 1;
 
@@ -173,17 +189,17 @@ int write_block (uint64_t v_addr, uint8_t *data, size_t size, int create_page)
  * @warning Uses 1 to signal a bad address to read and 0 to signal a success
  * @warning This function assumes that the data block does not exceed the maximum size of the virtual address space.
  */
-int read_mem (uint64_t v_addr, uint8_t *buffer, size_t size)
+int read_mem (Table* table, uint64_t v_addr, uint8_t *buffer, size_t size)
 {
     if (size == 1)
     {
-        uint8_t *physical_addr = decompose_address(v_addr, 0);
+        uint8_t *physical_addr = decompose_address(table, v_addr, 0);
         // If the physical address could not be read because of a Segmentation Fault return 1
         if (!physical_addr) return 1;
         *buffer = *physical_addr;
         return 0;
     }
-        return read_block(v_addr, buffer, size);    
+        return read_block(table, v_addr, buffer, size);    
 }
 
 /**
@@ -195,13 +211,13 @@ int read_mem (uint64_t v_addr, uint8_t *buffer, size_t size)
  * @param size Size of the data block to be read in bytes
  * @return 0 on success, 1 if any part of the read operation encounters an unmapped address (Segmentation Fault)
  */
-int read_block (uint64_t v_addr, uint8_t *buffer, size_t size)
+int read_block (Table* table, uint64_t v_addr, uint8_t *buffer, size_t size)
 {
     size_t read = 0;
     while (read < size)
     {
         uint64_t current_addr = v_addr + read;
-        uint8_t *physical_addr = decompose_address(current_addr, 0);
+        uint8_t *physical_addr = decompose_address(table, current_addr, 0);
 
         // If the physical address could not be read because of a Segmentation Fault return 1
         if (!physical_addr) return 1;

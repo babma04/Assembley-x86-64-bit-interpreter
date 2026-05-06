@@ -4,15 +4,11 @@ from register_manager import Registers_Interface
 
 class Data_Memory:
     """
-    Simulates the full system memory with:
-      - byte-addressable memory
-      - a downward-growing stack
-      - stack cells fixed to 8 bytes each
-      \n
+    Helper class to manage memory allocation and access.
     Used by the Segment_Mapper to create the memory for the CPU.
     All memory addresses are relative to the memory base address.
     Provides methods to read and write data of various sizes and to perform stack operations.\n
-    All memory is stored in a bytearray for efficiency.
+    All memory is stored in a low-level paging system for efficiency.
     All stack operations (push/pop) are done with fixed 8-byte entries.
     Allows reading and writing of data in sizes of 1, 2, 4, or 8 bytes.
     All stack operations (push/pop) are done with fixed 8-byte entries.\n
@@ -25,25 +21,33 @@ class Data_Memory:
     :type stack_start: int
     :return: An instance of Data_Memory
     :rtype: Data_Memory
+    :raises MemoryError: If the memory table fails to initialize
     """
-
+    # Memory constraints 
     RODATA_BASE: int = 0x500000
     STACK_START = 0x7fffffffe000
     STACK_LIMIT: int = 0xe000000000  # Arbitrary lower limit for stack growth to prevent overflow
+
 
     def __init__(self, registers: Registers_Interface, memory_base: int = RODATA_BASE) -> None:
         self.start: int= memory_base 
         self.registers = registers
         
+        # C libs initializers
         # Loads C memory management lib as an instance of the class
         _base_dir = os.path.dirname(os.path.abspath(__file__))
         _lib_path = os.path.join(_base_dir, "libmmu.so")
         self.lib = ctypes.CDLL(_lib_path)
 
         # Setup C types as usable types in python
-        self.lib.write_mem.argtypes = [ctypes.c_uint64, ctypes.c_uint8]
-        self.lib.read_mem.argtypes = [ctypes.c_uint64, ctypes.POINTER(ctypes.c_uint8)]
+        self.lib.table_init.restype = ctypes.c_void_p
+        self.lib.write_mem.argtypes = [ctypes.c_void_p, ctypes.c_uint64, ctypes.c_uint8, ctypes.c_size_t, ctypes.c_int]
+        self.lib.read_mem.argtypes = [ctypes.c_void_p, ctypes.c_uint64, ctypes.POINTER(ctypes.c_uint8), ctypes.c_size_t]
         self.lib.read_mem.restype = ctypes.c_int
+        
+        self.table = self.lib.table_init()
+        if (not self.table):
+            raise MemoryError("Failed to initialize memory table.")
 
     # ------------------------
     # Read and write methods 
@@ -62,9 +66,12 @@ class Data_Memory:
         :rtype: bytes
         :raises MemoryError: If the read operation fails (e.g., due to a segmentation fault)
         """
-        #return bytes(self._c_read(addr + i) for i in range(size))
+        # Python types to C types conversions and buffer allocation
         buffer = (ctypes.c_uint8 * size)()  # Create a buffer to hold the read bytes
-        if self.lib.read_mem(addr, buffer, size) == 1:  # Read memory into the buffer
+        c_addr: ctypes.c_uint64 = ctypes.c_uint64(addr)  # Convert address to C type
+        c_size: ctypes.c_size_t = ctypes.c_size_t(size)  # Convert size to C type
+
+        if self.lib.read_mem(self.table, c_addr, buffer, c_size) == 1:  # Read memory into the buffer
             raise MemoryError(f"Segmentation Fault at 0x{hex(addr)}")
         return bytes(buffer)  # Convert the buffer to bytes and return
     
@@ -90,10 +97,19 @@ class Data_Memory:
         # Verify data correctness 
         if not self.valid_data_length(data, size):
             data = self.get_valid_data(data, size)
+
+        # Python types to C types conversions and buffer allocation
         c_data = (ctypes.c_uint8 * size).from_buffer_copy(data)  # Convert data to a C array
-        if self.lib.write_mem(addr, c_data, size, 1 if create_page else 0) == 1:  # Write memory from the C array
+        c_addr: ctypes.c_uint64 = ctypes.c_uint64(addr)  # Convert address to C type
+        c_size: ctypes.c_size_t = ctypes.c_size_t(size)  # Convert size to C type
+        
+        if self.lib.write_mem(self.table, c_addr, c_data, c_size, 1 if create_page else 0) == 1:  # Write memory from the C array
             raise MemoryError(f"Segmentation Fault at 0x{hex(addr)}")
     
+    # --------------------------------------
+    # Data validation and formatting helpers
+    # --------------------------------------
+
     def valid_data_length(self, data: bytes, size: int) -> bool:
         """
         Verifies if the length of the data is valid for the size attributed to the write call.\n
@@ -122,9 +138,9 @@ class Data_Memory:
         """
         return data[:size].ljust(size, b'\x00')
 
-    # -----------------------
+    # --------------------------------------------
     #  STACK OPERATIONS (fixed 8 bytes per entry)
-    # -----------------------
+    # --------------------------------------------
     def push(self, value: bytes) -> None:
         """
         Push a full 8-byte (64-bit) value.
