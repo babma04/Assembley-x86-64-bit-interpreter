@@ -8,9 +8,9 @@
 struct Operand{
     long long address;
     long long value;
-    char size; // 1,2,4,8
+    uint8_t size; // 1,2,4,8
     char *op_type;
-    char visual_rep; // 1 for text, 0 for numerical
+    uint8_t visual_rep; // 1 for text, 0 for numerical
 };
 
 // To be implemented a fpu operand struct
@@ -21,6 +21,7 @@ struct Info {
     Operand op1;
     Operand op2;
     CPURegs *registers;
+    Table* table;
     Operand result;
 };
 
@@ -55,12 +56,16 @@ InstructionMap dispatch_table[] = {
 // Operand fetching, setting and cleaning functions
 // --------------------------------------------------------------------------------
 
+// -------------------
+// Operand state init
+// -------------------
+
 /**
  * @brief Creates a pointer to the operand Info structure and returns it.
  */
 Info* create_operand_state ()
 {
-    Info *op_state = malloc (sizeof(Info));
+    Info *op_state = calloc(1, sizeof(Info));
 
     if (op_state == NULL)
     {
@@ -69,6 +74,22 @@ Info* create_operand_state ()
     }
     return op_state;
 }
+
+/**
+ * @brief Frees up the pointer from memory.
+ * * Mainly for integration with python
+ * 
+ * @param ptr Pointer to free
+ */
+void free_operand_state (Info* s)
+{
+    if (s == NULL) return;
+    free(s);
+}
+
+// ----------------------------
+// Info setters
+// ----------------------------
 
 /**
  * @brief Sets the operand info in the structure.
@@ -81,7 +102,7 @@ Info* create_operand_state ()
  * @param type Address for the sequence of characters that define the data type of this operands value
  * @param visual_rep Visual representation it should have (0 for string representation, 1 for numerical representation)
  */
-void get_operand_info (Info *current_instruction_state, char *operand, long long address, long long value, char size, char *op_type, char visual_rep)
+void set_operand_info (Info *current_instruction_state, char *operand, long long address, long long value, uint8_t size, char *op_type, uint8_t visual_rep)
 {
     if (operand != NULL && strcmp(operand, "op1") == 0 )
     {
@@ -124,36 +145,46 @@ void set_registers_ref (Info *current_state, CPURegs *r)
 }
 
 /**
- * @brief Sets the information about the result based on the operators info.
- * * Leaves the result value non altered to be set by the operation called.
+ * @brief Sets the table reference to use for memory access operations.
  * 
  * @param current_state Pointer to the Info structure holding all operand, instruction result and registers info
+ * @param t Table structure holding all paging info for memory access operations
  */
-void set_result_info (Info *current_state)
+void set_table_ref (Info *current_state, Table *t)
 {
-    current_state->result.op_type = current_state->op1.op_type;
-    current_state->result.size = current_state->op1.size;
-    current_state->result.address = current_state->op1.address;
-    current_state->result.visual_rep = (current_state->op1.visual_rep || current_state->op2.visual_rep);
+    current_state->table = t;
 }
 
+// -------------------
+// Cleaners
+// -------------------
+
+
 /**
- * @brief Resets all values in the structure to 0's.
+ * @brief Resets all Operand fields and Instruction of the Info structure to their default values (NULL for pointers, 0 for numerical values).
  * 
  * @param current_instruction_state Pointer to the Info structure holding all operand, instruction, registers and results info
- * @return -1 if a memory allocation failed, 0 as a successful exit code
  */
-int clean(Info *current_instruction_state)
+void clean(Info *current_instruction_state)
 {
-    Info *tmp = malloc(sizeof(Info));
-    if (tmp == NULL)
-    {
-        printf ("Memory allocation error");
-        return -1;
-    }
-    free(current_instruction_state);
-    current_instruction_state = tmp;
-    return 0;
+    current_instruction_state->instruction = NULL;
+    current_instruction_state->op1.address = 0;
+    current_instruction_state->op1.value = 0;
+    current_instruction_state->op1.size = 0;
+    current_instruction_state->op1.op_type = NULL;
+    current_instruction_state->op1.visual_rep = 0;
+
+    current_instruction_state->op2.address = 0;
+    current_instruction_state->op2.value = 0;
+    current_instruction_state->op2.size = 0;
+    current_instruction_state->op2.op_type = NULL;
+    current_instruction_state->op2.visual_rep = 0;
+
+    current_instruction_state->result.address = 0;
+    current_instruction_state->result.value = 0;
+    current_instruction_state->result.size = 0;
+    current_instruction_state->result.op_type = NULL;
+    current_instruction_state->result.visual_rep = 0;
 }
 
 /**
@@ -186,6 +217,7 @@ void dispatch(Info *current_instruction_state)
     for (int i = 0; i < TABLE_SIZE; i++) {
         if (strcmp(current_instruction_state->instruction, dispatch_table[i].instruction) == 0) {
             dispatch_table[i].func(current_instruction_state);
+            set_result(current_instruction_state);
             return;
         }
     }
@@ -195,9 +227,9 @@ void dispatch(Info *current_instruction_state)
     clean(current_instruction_state);
 }
 
-// ---------------------------
-// Result management functions
-// ---------------------------
+// --------------
+// Result getter
+// --------------
 
 /**
  * @brief Reads the result of the current instruction execution and returns it if it's a register, otherwise returns -1.
@@ -205,28 +237,46 @@ void dispatch(Info *current_instruction_state)
  * @param current_instruction_state Pointer to the Info structure holding all operand, instruction and results info
  * @return int Result of the instruction execution if it's a register, otherwise -1
  */
-int read_result(Info *current_instruction_state)
+long long read_result(Info *current_instruction_state)
 {
-    if (strcmp(current_instruction_state->result.op_type, "register") == 0)
-    {
-        return current_instruction_state->result.value;
-    }
-    clean(current_instruction_state);
-    return -1;
+    return current_instruction_state->result.value;
+}
+
+// --------------
+// Result setter
+// --------------
+
+/**
+ * @brief Sets the information about the result based on the operators info.
+ * * Leaves the result value non altered to be set by the operation called.
+ * 
+ * @param current_state Pointer to the Info structure holding all operand, instruction result and registers info
+ */
+void set_result_info (Info *current_state)
+{
+    current_state->result.op_type = current_state->op1.op_type;
+    current_state->result.size = current_state->op1.size;
+    current_state->result.address = current_state->op1.address;
+    current_state->result.visual_rep = (current_state->op1.visual_rep || current_state->op2.visual_rep);
 }
 
 /**
- * @brief Writes the result of the current instruction execution if it's a memory address and cleans the current instruction state structure.
+ * @brief Writes the result of the current instruction execution if it's a memory address or register and cleans the current instruction state structure.
  * 
  * @param current_instruction_state Pointer to the Info structure holding all operand, instruction and results info
- * @warning If the result is not a memory address does nothing
+ * @warning If the result is not a memory address or register does nothing
  * @warning After writing the result on memory cleans the current instruction state structure
  */
 void set_result(Info *current_instruction_state)
 {
     if (strcmp(current_instruction_state->result.op_type, "memory") == 0)
     {
-        write_mem(current_instruction_state->result.address, (uint8_t*)&current_instruction_state->result.value, current_instruction_state->result.size, 1);
+        write_mem(current_instruction_state->table, current_instruction_state->result.address, (uint8_t*)&current_instruction_state->result.value, current_instruction_state->result.size, 1);
+    }
+    else if (strcmp(current_instruction_state->result.op_type, "register") == 0)
+    {
+        uint8_t is_high = (current_instruction_state->result.address <= 3 && current_instruction_state->result.size == 1) ? 1 : 0;
+        write_reg(current_instruction_state->registers, current_instruction_state->result.address, current_instruction_state->result.value, current_instruction_state->result.size, is_high);
     }
     clean(current_instruction_state);
 }
@@ -264,6 +314,10 @@ void flags_update(Info *s, unsigned long long result)
     uint32_t rflags_value = (carry << 0) | (zero << 6) | (sign << 7) | (overflow << 11) | (trap << 8);
     write_rflags(s->registers, rflags_value);
 }
+
+// ----------------------------
+// Main Flux Control function
+// ----------------------------
 
 /**
  * @brief Executes the compare instruction, which is a subtraction that only updates the flags and does not store the result.

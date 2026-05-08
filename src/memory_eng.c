@@ -31,6 +31,27 @@ Table* table_init()
     return table;
 }
 
+/**
+ * @brief Frees the memory allocated for the paging structure.
+ * * Recursively frees all allocated pages and tables in the paging structure, starting from the given Table pointer.
+ * * After freeing all allocated memory, the function also frees the Table structure itself.
+ * @param table Pointer to the Table structure representing the root of the paging structure to be freed
+ * @warning This function should be called when the paging structure is no longer needed to prevent memory leaks. 
+ * * If the provided pointer is NULL, the function will simply return without performing any operations.
+ */
+void free_table(Table* table)
+{
+    if (!table) return;
+
+    // Free all allocated pages in the table
+    for (int i = 0; i < MAX_PAGES; i++) {
+        if (table->entries[i]) {
+            free_table((Table*)table->entries[i]); // Recursively free sub-tables
+        }
+    }
+    // Free the table itself
+    free(table);
+}
 
 /**
  * @brief Main MMU funion. 
@@ -42,7 +63,7 @@ Table* table_init()
  * @return Pointer to the physical byte, or NULL if unmapped and create_page is 0
  * @note create_page param affects directly Table structures creation permission. 
  */
-uint8_t *decompose_address (Table *CR3, uint64_t v_addr, int create_page)
+uint8_t *decompose_address (Table *CR3, uint64_t v_addr, uint8_t create_page)
 {
     // If the page_dir_root is not yet initialized initialize it
     if (!CR3)
@@ -130,7 +151,7 @@ uint8_t *decompose_address (Table *CR3, uint64_t v_addr, int create_page)
  * If set to 0, the function will not create new pages and will return without writing if the target page does not exist. 
  * If set to 1, the function will create new pages as needed to accommodate the write operation.
  */
-int write_mem (Table* table, uint64_t v_addr, uint8_t *data, size_t size, int create_page)
+int write_mem (Table* table, uint64_t v_addr, uint8_t *data, uint8_t size, uint8_t create_page)
 {
     if (size == 1)
     {
@@ -156,7 +177,7 @@ int write_mem (Table* table, uint64_t v_addr, uint8_t *data, size_t size, int cr
  * If set to 0, the function will not create new pages and will return without writing if the target page does not exist. 
  * If set to 1, the function will create new pages as needed to accommodate the write operation.
  */
-int write_block (Table* table, uint64_t v_addr, uint8_t *data, size_t size, int create_page)
+int write_block (Table* table, uint64_t v_addr, uint8_t *data, uint8_t size, uint8_t create_page)
 {
     size_t written = 0;
     while (written < size)
@@ -189,7 +210,7 @@ int write_block (Table* table, uint64_t v_addr, uint8_t *data, size_t size, int 
  * @warning Uses 1 to signal a bad address to read and 0 to signal a success
  * @warning This function assumes that the data block does not exceed the maximum size of the virtual address space.
  */
-int read_mem (Table* table, uint64_t v_addr, uint8_t *buffer, size_t size)
+int read_mem (Table* table, uint64_t v_addr, uint8_t *buffer, uint8_t size)
 {
     if (size == 1)
     {
@@ -211,7 +232,7 @@ int read_mem (Table* table, uint64_t v_addr, uint8_t *buffer, size_t size)
  * @param size Size of the data block to be read in bytes
  * @return 0 on success, 1 if any part of the read operation encounters an unmapped address (Segmentation Fault)
  */
-int read_block (Table* table, uint64_t v_addr, uint8_t *buffer, size_t size)
+int read_block (Table* table, uint64_t v_addr, uint8_t *buffer, uint8_t size)
 {
     size_t read = 0;
     while (read < size)

@@ -21,20 +21,20 @@ typedef struct CPURegs CPURegs;
 // Prototypes
 // Register getters
 CPURegs* CPURegs_create ();
-x86_aliased_registers* get_reg_ptr (CPURegs *current_state, int reg_id);
+// Register  freeing
+void CPURegs_free(CPURegs *c);
 
 //sign setters
-void set_reg_sign (CPURegs *current_state, int reg_id, uint8_t is_signed);
-int is_signed (CPURegs *current_state, int reg_id);
+void set_reg_sign (CPURegs *current_state, uint8_t reg_id, uint8_t is_signed);
+int is_signed (CPURegs *current_state, uint8_t reg_id);
 
 // writing
-void write_reg (CPURegs *current_state, int reg_id, int64_t value, int size, int is_high);
-
+void write_reg (CPURegs *current_state, uint8_t reg_id, int64_t value, uint8_t size, uint8_t is_high);
 // Read
-uint64_t read_8b_reg (CPURegs *current_state, int reg_id);
-uint32_t read_4b_reg (CPURegs *current_state, int reg_id);
-uint16_t read_2b_reg (CPURegs *current_state, int reg_id);
-uint8_t read_1b_reg (CPURegs *current_state, int reg_id, int is_high);
+uint64_t read_8b_reg (CPURegs *current_state, uint8_t reg_id);
+uint32_t read_4b_reg (CPURegs *current_state, uint8_t reg_id);
+uint16_t read_2b_reg (CPURegs *current_state, uint8_t reg_id);
+uint8_t read_1b_reg (CPURegs *current_state, uint8_t reg_id, uint8_t is_high);
 
 // Flags
 uint32_t read_rflags (CPURegs *current_state);
@@ -44,7 +44,7 @@ int read_zero_flag (CPURegs *current_state);
 int read_sign_flag (CPURegs *current_state);
 int read_overflow_flag (CPURegs *current_state);
 void write_rflags (CPURegs *current_state, uint32_t value);
-void exch_rflag (CPURegs *current_state, int flag_id);
+void exch_rflag (CPURegs *current_state, uint8_t flag_id);
 void set_trap_flag (CPURegs *current_state);
 
 #endif // REGISTERS_H

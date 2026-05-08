@@ -37,36 +37,29 @@ typedef void (*InstructionFunc)(Info *);
 // Prototypes
 // ---------------------------------------------------
 
-// Operand management prototypes
+// Pointer creation
 Info* create_operand_state ();
-void get_operand_info (Info *current_instruction_state, char *operand, long long address, long long value, char size, char *op_type, char visual_rep);
-void set_instruction(Info *current_instruction_state, char *instruction);
-void set_registers_ref (Info *current_state, CPURegs *r);
-void set_result_info (Info *current_state);
-int clean(Info *current_instruction_state);
+// Pointer freeing
+
+
+// Pointer freeing
 void free_pointer (Info* ptr);
+
+// Essential data structure setters
+void set_registers_ref (Info *current_state, CPURegs *r);
+void set_table_ref (Info *current_state, Table *t);
+
+// Info setters 
+void set_operand_info (Info *current_instruction_state, char *operand, long long address, long long value, uint8_t size, char *op_type, uint8_t visual_rep);
+void set_instruction(Info *current_instruction_state, char *instruction);
+
+// Infor cleaners
+void clean(Info *current_instruction_state);
+
+// Result getter
+long long read_result(Info *current_instruction_state);
 
 // Instruction dispatching prototypes
 void dispatch(Info *current_instruction_state);
-
-// Data Path functions prototypes
-void exec_cmp(Info *s);
-
-// ALU functions prototypes
-void exec_add(Info *s);
-void exec_adc(Info *s);
-void exec_sub(Info *s);
-void exec_sbb(Info *s);
-void exec_inc(Info *s);
-void exec_dec(Info *s);
-void exec_and(Info *s);
-void exec_or(Info *s);
-void exec_xor(Info *s);
-void exec_not(Info *s);
-void exec_neg(Info *s);
-void exec_xchg(Info *s);
-
-// FPU functions prototypes
-// (TODO)
 
 #endif // OPERATIONS_H

@@ -12,7 +12,8 @@ typedef struct Table Table;
 
 // Prototypes
 Table* table_init();
-int write_mem(Table* table, uint64_t v_addr, uint8_t *data, size_t size, int create_page);
-int read_mem(Table* table, uint64_t v_addr, uint8_t *result, size_t size);
+void free_table(Table* table);
+int write_mem(Table* table, uint64_t v_addr, uint8_t *data, uint8_t size, uint8_t create_page);
+int read_mem(Table* table, uint64_t v_addr, uint8_t *result, uint8_t size);
 
 #endif // MEMORY_ENG_H

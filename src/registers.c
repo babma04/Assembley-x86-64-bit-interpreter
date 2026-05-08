@@ -16,7 +16,7 @@ union x86_aliased_registers {
 
 struct x86_general_register_complex {
     x86_aliased_registers reg;
-    uint8_t is_signed; // 0 = unsingned, 1 = signed
+    uint8_t is_signed; // 0 = unsigned, 1 = signed
 };
 
 struct x86_64bit_standard_registers {
@@ -47,16 +47,27 @@ struct CPURegs {
  */
 CPURegs* CPURegs_create()
 {
-    CPURegs *c = malloc(sizeof(CPURegs));
+    CPURegs *c = (CPURegs*)calloc(1, sizeof(CPURegs));
     
     // Memory allocation confirmation
     if (c == NULL)
     {
-        printf("Fail allocating register memory. Abborting program\n");
+        printf("Fail allocating register memory. Aborting program\n");
         return NULL;
     }
 
     return c;
+}
+
+/**
+ * @brief Frees the memory allocated for the CPURegs structure.
+ * 
+ * @param c Pointer to the CPURegs structure to free
+ */
+void CPURegs_free(CPURegs *c)
+{
+    if (c == NULL) return;
+    free(c);
 }
 
 //-------------------------
@@ -70,7 +81,7 @@ CPURegs* CPURegs_create()
  * @param current_state Holder of the register structures
  * @param reg_id Index of the desired register as in the CPURegs structure
  */
-x86_aliased_registers* get_reg_ptr(CPURegs *current_state, int reg_id)
+x86_aliased_registers* get_reg_ptr(CPURegs *current_state, uint8_t reg_id)
 {
     switch(reg_id) {
         case 0: return &current_state->rax.reg;
@@ -96,7 +107,7 @@ x86_aliased_registers* get_reg_ptr(CPURegs *current_state, int reg_id)
 }
 
 //-------------------------
-// Signing related funtions
+// Signing related functions
 //-------------------------
 
 /**
@@ -106,7 +117,7 @@ x86_aliased_registers* get_reg_ptr(CPURegs *current_state, int reg_id)
  * @param reg_id Index of the register in as defined by the order of initialization in the CPURegs struct
  * @param is_signed 0 = unsigned , 1 = signed
  */
-void set_reg_sign (CPURegs *current_state, int reg_id, uint8_t is_signed)
+void set_reg_sign (CPURegs *current_state, uint8_t reg_id, uint8_t is_signed)
 {
     if (reg_id < 0 || reg_id > 15) return;
     uint8_t *tmp = (uint8_t*)get_reg_ptr(current_state, reg_id);
@@ -119,7 +130,7 @@ void set_reg_sign (CPURegs *current_state, int reg_id, uint8_t is_signed)
  * @param current_state Holder of the register structures
  * @param reg_id Index of the register in as defined by the order of initialization in the CPURegs struct
  */
-int is_signed (CPURegs *current_state, int reg_id)
+int is_signed (CPURegs *current_state, uint8_t reg_id)
 {
     if (reg_id < 0 || reg_id > 15) return -1;
     uint8_t *tmp = (uint8_t*)get_reg_ptr(current_state, reg_id);
@@ -127,7 +138,7 @@ int is_signed (CPURegs *current_state, int reg_id)
 }
 
 //-------------------------
-// Write related funtions
+// Write related functions
 //-------------------------
 
 /**
@@ -139,9 +150,9 @@ int is_signed (CPURegs *current_state, int reg_id)
  * @param size   Number of bytes to write (1, 2, 4, 8)
  * @param is_high: Boolean (1 if accessing AH/BH/CH/DH)
  */
-void write_reg(CPURegs *current_state, int reg_id, int64_t value, int size, int is_high)
+void write_reg(CPURegs *current_state, uint8_t reg_id, int64_t value, uint8_t size, uint8_t is_high)
 {
-    if (reg_id < 0 | reg_id > 15) return;
+    if (reg_id < 0 || reg_id > 15) return;
 
     // Pointer to the start of the register array for the first structure
     x86_aliased_registers *target = get_reg_ptr(current_state, reg_id);
@@ -160,18 +171,18 @@ void write_reg(CPURegs *current_state, int reg_id, int64_t value, int size, int 
 
 
 //-------------------------
-// Read related funtions
+// Read related functions
 //-------------------------
 
 /**
  * @brief Hardware Dispatcher fo 8 byte registers.
  * 
  * @param current_state Holder of the register structures
- * @param reg_id Index of the register as defined by the order of initialization in the CPURegs sructure
+ * @param reg_id Index of the register as defined by the order of initialization in the CPURegs structure
  * @return The 64-bit value of the given register
  * @warning The index must be valid for a correct result
  */
-uint64_t read_8b_reg(CPURegs *current_state, int reg_id) {
+uint64_t read_8b_reg(CPURegs *current_state, uint8_t reg_id) {
     x86_aliased_registers *target = get_reg_ptr(current_state, reg_id);
     return target->r64;
 }
@@ -180,11 +191,11 @@ uint64_t read_8b_reg(CPURegs *current_state, int reg_id) {
  * @brief Hardware Dispatcher fo 4 byte registers.
  * 
  * @param current_state Holder of the register structures
- * @param reg_id Index of the register as defined by the order of initialization in the CPURegs sructure
+ * @param reg_id Index of the register as defined by the order of initialization in the CPURegs structure
  * @return The 32-bit value of the given register
  * @warning The index must be valid for a correct result
  */
-uint32_t read_4b_reg(CPURegs *current_state, int reg_id) {
+uint32_t read_4b_reg(CPURegs *current_state, uint8_t reg_id) {
     x86_aliased_registers *target = get_reg_ptr(current_state, reg_id);
     return target->e32;
 }
@@ -193,11 +204,11 @@ uint32_t read_4b_reg(CPURegs *current_state, int reg_id) {
  * @brief Hardware Dispatcher fo 2 byte registers.
  * 
  * @param current_state Holder of the register structures
- * @param reg_id Index of the register as defined by the order of initialization in the CPURegs sructure
+ * @param reg_id Index of the register as defined by the order of initialization in the CPURegs structure
  * @return The 16-bit value of the given register
  * @warning The index must be valid for a correct result
  */
-uint16_t read_2b_reg(CPURegs *current_state, int reg_id) {
+uint16_t read_2b_reg(CPURegs *current_state, uint8_t reg_id) {
     x86_aliased_registers *target = get_reg_ptr(current_state, reg_id);
     return target->x16;
 }
@@ -206,19 +217,19 @@ uint16_t read_2b_reg(CPURegs *current_state, int reg_id) {
  * @brief Hardware Dispatcher fo 1 byte registers.
  * 
  * @param current_state Holder of the register structures
- * @param reg_id Index of the register as defined by the order of initialization in the CPURegs sructure
+ * @param reg_id Index of the register as defined by the order of initialization in the CPURegs structure
  * @param is_high Boolean (1 if accessing AH/BH/CH/DH)
  * @return The 8-bit value of the given register
  * @warning The index must be valid for a correct result
  */
-uint8_t read_1b_reg(CPURegs *current_state, int reg_id, int is_high) {
+uint8_t read_1b_reg(CPURegs *current_state, uint8_t reg_id, uint8_t is_high) {
     x86_aliased_registers *target = get_reg_ptr(current_state, reg_id);
     if (is_high && reg_id < 4) return target->r8.h;
     return target->r8.l;
 }
 
 // ------------------------------------
-// Flag reading and writing funtions
+// Flag reading and writing functions
 // ------------------------------------
 
 /**
@@ -305,7 +316,7 @@ void write_rflags(CPURegs *current_state, uint32_t value)
  * @param flag_id The bit number of the flag to exchange
  * @warning flag_id must be a valid id else it won't make any alterations to rflags
  */
-void exch_rflag (CPURegs *current_state, int flag_id)
+void exch_rflag (CPURegs *current_state, uint8_t flag_id)
 {
     // Verifies if the flag is valid
     if (flag_id < 0 || flag_id > 32) return;
