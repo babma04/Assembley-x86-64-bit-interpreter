@@ -61,13 +61,25 @@ class CPURegsStruct(ctypes.Structure):
 
 class Registers_Interface:
 
+    # Mapping of the sizes of the registers according to their directives
     SIZE_DIRECTIVES = {
         'byte': 1, 'word': 2, 'dword': 4, 'qword': 8
     }
 
+    # Parent registers mapping to get indexes
+    REGISTERS_MAP = [
+        "rax", "rbx", "rcx", "rdx", "rsi", "rdi", "rbp", "rsp", "r8", "r9", "r10", "r11", "r12", "r13", "r14", "r15"
+    ]
+
+    # Class attributes for the library and the pointer to the registers structure in c
+    __slots__ = ["lib", "regs"]
+
     def __init__(self, lib_path: str="./libreg.so"):
         # Load the library compiled s
         self.lib = ctypes.CDLL(os.path.abspath(lib_path))
+
+        # Initializes a costume pointer to the registers structure
+        self.regs = self.lib.CPURegs_create()
 
         # Define C return and args types
         self.lib.write_reg.argtypes = [
@@ -77,6 +89,10 @@ class Registers_Interface:
             ctypes.c_int     # is_high
         ]
 
+        # Return and input type definitions for the sign flag management and reading functions
+
+        #TODO 
+            # Change input/return type matching
         self.lib.set_reg_sign.argtypes = [ctypes.c_int, ctypes.c_uint8]
         self.lib.is_signed.restype = ctypes.c_int
 
@@ -91,9 +107,6 @@ class Registers_Interface:
         self.lib.read_1b_reg.argtypes = [ctypes.c_int, ctypes.c_int]
         self.lib.read_rflags.restype = ctypes.c_uint32
         self.lib.read_rflags.argtypes = []
-
-        # Parent registers mapping to ghet indexes
-        self.regs_map: list[str] = ["rax", "rbx", "rcx", "rdx", "rsi", "rdi", "rbp", "rsp", "r8", "r9", "r10", "r11", "r12", "r13", "r14", "r15"]
 
 
     #-------------------
@@ -125,9 +138,9 @@ class Registers_Interface:
         if value < min_signed_val or value > max_unsigned_val:
             raise ValueError(f"INVALID VALUE {value} TO ATTRIBUTE TO {expression}. OVERFLOW DETECTED.")
         try:
-            reg_id = next((i for i, key in enumerate(self.regs_map) if key == reg_info[0]), -1)
+            reg_id = next((i for i, key in enumerate(self.REGISTERS_MAP) if key == reg_info[0]), -1)
         except StopIteration:
-            raise ValueError(f"RERGISTER {expression} DOES NOT EXIST.")
+            raise ValueError(f"REGISTER {expression} DOES NOT EXIST.")
         
         self.lib.write_reg(reg_id, value, reg_size, self.is_high(expression))
         self.lib.set_reg_sign(reg_id, 1 if signed else 0)
@@ -145,16 +158,16 @@ class Registers_Interface:
         :type expression: str
         :return: Value of the given register
         :rtype: int
-        :raises ValueError: If a non existante expression is passed to the execution
+        :raises ValueError: If a non existent expression is passed to the execution
         """
         reg_info: tuple[str,int] = self.get_register_parent(expression)
         reg_id: int = -1
         reg_size: int = reg_info[1]
         
         try:
-            reg_id = next((i for i, key in enumerate(self.regs_map) if key == reg_info[0]), -1)
+            reg_id = next((i for i, key in enumerate(self.REGISTERS_MAP) if key == reg_info[0]), -1)
         except StopIteration:
-            raise ValueError(f"RERGISTER {expression} DOES NOT EXIST.")
+            raise ValueError(f"REGISTER {expression} DOES NOT EXIST.")
         
         value: int =  self.match_read(reg_id, reg_size, self.is_high(expression))
 
@@ -169,7 +182,7 @@ class Registers_Interface:
         """
         Maps the sub-registers to its 64-bit parent and returns it with the mask require to obtain its value.
         
-        :param expression: sub 64-bit register (has a falback option if a 64-bit register is passed)
+        :param expression: sub 64-bit register (has a fallback option if a 64-bit register is passed)
         :type expression: str
         :return: Tuple containing the parent register and the size of the given register
         :rtype: tuple[str, int]
@@ -209,11 +222,11 @@ class Registers_Interface:
     
     def match_read(self, reg_id: int, size: int, is_high: int) -> int:
         """
-        Directs execution to the correct read funtion in c according to the specified size.
+        Directs execution to the correct read function in c according to the specified size.
 
         :param reg_id: Index of the register according to the c structure entries
         :type reg_id: int
-        :param size: Size of the rregister to read
+        :param size: Size of the register to read
         :type size: int
         :param is_high: Flag to signal if the register is the second byte of a parent register (1 - yes; 0 - no)
         :type is_high: int
