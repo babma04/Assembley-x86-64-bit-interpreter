@@ -31,6 +31,7 @@ Table* table_init()
     return table;
 }
 
+
 /**
  * @brief Frees the memory allocated for the paging structure.
  * * Recursively frees all allocated pages and tables in the paging structure, starting from the given Table pointer.

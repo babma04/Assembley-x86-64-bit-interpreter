@@ -74,9 +74,11 @@ class Registers_Interface:
     # Class attributes for the library and the pointer to the registers structure in c
     __slots__ = ["lib", "regs"]
 
-    def __init__(self, lib_path: str="./libreg.so"):
+    def __init__(self) -> None:
         # Load the library compiled s
-        self.lib = ctypes.CDLL(os.path.abspath(lib_path))
+        _base_dir = os.path.dirname(os.path.abspath(__file__))
+        _lib_path = os.path.join(_base_dir, "/lib/libreg.so")
+        self.lib = ctypes.CDLL(_lib_path)
 
         # Initializes a costume pointer to the registers structure
         self.regs = self.lib.CPURegs_create()

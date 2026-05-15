@@ -36,16 +36,19 @@ class Data_Memory:
         # C libs initializers
         # Loads C memory management lib as an instance of the class
         _base_dir = os.path.dirname(os.path.abspath(__file__))
-        _lib_path = os.path.join(_base_dir, "libmmu.so")
+        _lib_path = os.path.join(_base_dir, "/lib/libmmu.so")
         self.lib = ctypes.CDLL(_lib_path)
 
         # Setup C types as usable types in python
         self.lib.table_init.restype = ctypes.c_void_p
-        self.lib.write_mem.argtypes = [ctypes.c_void_p, ctypes.c_uint64, ctypes.c_uint8, ctypes.c_size_t, ctypes.c_int]
-        self.lib.read_mem.argtypes = [ctypes.c_void_p, ctypes.c_uint64, ctypes.POINTER(ctypes.c_uint8), ctypes.c_size_t]
+        self.lib.free_table.argtypes = [ctypes.c_void_p]
+        self.lib.write_mem.argtypes = [ctypes.c_void_p, ctypes.c_uint64, ctypes.c_uint8, ctypes.c_uint8, ctypes.c_uint8]
+        self.lib.write_mem.restype = ctypes.c_int
+        self.lib.read_mem.argtypes = [ctypes.c_void_p, ctypes.c_uint64, ctypes.POINTER(ctypes.c_uint8), ctypes.c_uint8]
         self.lib.read_mem.restype = ctypes.c_int
         
         self.table = self.lib.table_init()
+        # Double check for table init 
         if (not self.table):
             raise MemoryError("Failed to initialize memory table.")
 
