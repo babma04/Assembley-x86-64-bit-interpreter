@@ -187,17 +187,6 @@ void clean(Info *current_instruction_state)
     current_instruction_state->result.visual_rep = 0;
 }
 
-/**
- * @brief Frees up the pointer from memory.
- * * Mainly for integration with python
- * 
- * @param ptr Pointer to free
- */
-void free_pointer (Info* ptr)
-{
-    free(ptr);
-}
-
 //--------------------------------
 // Instruction execution functions
 //--------------------------------

@@ -39,11 +39,9 @@ typedef void (*InstructionFunc)(Info *);
 
 // Pointer creation
 Info* create_operand_state ();
-// Pointer freeing
-
 
 // Pointer freeing
-void free_pointer (Info* ptr);
+void free_operand_state (Info* ptr);
 
 // Essential data structure setters
 void set_registers_ref (Info *current_state, CPURegs *r);
@@ -53,11 +51,8 @@ void set_table_ref (Info *current_state, Table *t);
 void set_operand_info (Info *current_instruction_state, char *operand, long long address, long long value, uint8_t size, char *op_type, uint8_t visual_rep);
 void set_instruction(Info *current_instruction_state, char *instruction);
 
-// Infor cleaners
+// Infor cleaner
 void clean(Info *current_instruction_state);
-
-// Result getter
-long long read_result(Info *current_instruction_state);
 
 // Instruction dispatching prototypes
 void dispatch(Info *current_instruction_state);
