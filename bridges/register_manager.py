@@ -1,63 +1,9 @@
 import ctypes
 import os
 
-# NEEDS POINTER REVISIONS
-
-#--------------------
-# C Register Mapping
-#--------------------
-
-class X86GeneralReg(ctypes.Union):
-    """
-    Handles the main aliasing of the same registers in same sizes (RAX/EAX/AX/AL/AH) using the c reg script
-    """
-    class _R8(ctypes.Structure):
-        """
-        Handles the structure of the low and high bytes for the registers that enable it
-        """
-        _fields_ = [("l", ctypes.c_uint8), ("h", ctypes.c_uint8)]
-    _fields_ = [
-        ("r64", ctypes.c_uint64),
-        ("e32", ctypes.c_uint32),
-        ("x16", ctypes.c_uint16),
-        ("r8", _R8)
-    ]
-
-class ComplexReg(ctypes.Structure):
-    """8 bytes data + 1 byte flag + 7 bytes padding = 16 bytes entire structure"""
-    _fields_ = [
-        ("reg", X86GeneralReg),
-        ("is_signed", ctypes.c_uint8),
-        ("padding", ctypes.c_uint8 * 7) 
-    ]
-
-class Standard64Reg(ctypes.Structure):
-    """8 bytes data + 1 byte flag + 7 bytes padding = 16 bytes entire structure"""
-    _fields_ = [
-        ("r64", ctypes.c_uint64),
-        ("is_signed", ctypes.c_uint8),
-        ("padding", ctypes.c_uint8 * 7)
-    ]
-
-class CPURegsStruct(ctypes.Structure):
-    """
-    Memory layout of your registers.c struct
-    """
-    _fields_ = [
-        ("rax", ComplexReg), ("rbx", ComplexReg),
-        ("rcx", ComplexReg), ("rdx", ComplexReg),
-        ("rsi", Standard64Reg), ("rdi", Standard64Reg),
-        ("rbp", Standard64Reg), ("rsp", Standard64Reg),
-        ("r8", Standard64Reg),  ("r9", Standard64Reg),
-        ("r10", Standard64Reg), ("r11", Standard64Reg),
-        ("r12", Standard64Reg), ("r13", Standard64Reg),
-        ("r14", Standard64Reg), ("r15", Standard64Reg),
-        ("rflags", ctypes.c_uint32)
-    ]
-
-#----------------------
+#---------------------
 # Registers interface
-#----------------------
+#---------------------
 
 class Registers_Interface:
 
@@ -83,37 +29,65 @@ class Registers_Interface:
         # Initializes a costume pointer to the registers structure
         self.regs = self.lib.CPURegs_create()
 
+        # -------------------------------
         # Define C return and args types
+        # -------------------------------
+
+        self.lib.CPURegs_create.restype = ctypes.c_void_p
+        self.lib.CPURegs_free.argtypes = [ctypes.c_void_p]
         self.lib.write_reg.argtypes = [
-            ctypes.c_int,    # reg_id
-            ctypes.c_int64,  # value (Signed 64-bit)
-            ctypes.c_int,    # size
-            ctypes.c_int     # is_high
+            ctypes.c_void_p,      # Pointer to the struct in memory
+            ctypes.c_int,                       # reg_id
+            ctypes.c_int64,                     # value to write
+            ctypes.c_int,                       # byte size of the reg (1, 2, 4, 8)
+            ctypes.c_int                        # is_high
         ]
-
-        # Return and input type definitions for the sign flag management and reading functions
-
-        #TODO 
-            # Change input/return type matching
-        self.lib.set_reg_sign.argtypes = [ctypes.c_int, ctypes.c_uint8]
-        self.lib.is_signed.restype = ctypes.c_int
-
-        self.lib.get_cpu_state.restype = ctypes.POINTER(CPURegsStruct)
-        self.lib.read_8b_reg.restype = ctypes.c_int64
-        self.lib.read_8b_reg.argtypes = [ctypes.c_int]
-        self.lib.read_4b_reg.restype = ctypes.c_int32
-        self.lib.read_4b_reg.argtypes = [ctypes.c_int]
-        self.lib.read_2b_reg.restype = ctypes.c_int16
-        self.lib.read_2b_reg.argtypes = [ctypes.c_int]
-        self.lib.read_1b_reg.restype = ctypes.c_int8
-        self.lib.read_1b_reg.argtypes = [ctypes.c_int, ctypes.c_int]
+        self.lib.read_8b_reg.argtypes = [
+            ctypes.c_void_p,      # Pointer to the struct in memory
+            ctypes.c_uint8                      # reg_id
+        ]
+        self.lib.read_8b_reg.restype = ctypes.c_uint64
+        self.lib.read_4b_reg.argtypes = [
+            ctypes.c_void_p,      
+            ctypes.c_uint8
+        ]
+        self.lib.read_4b_reg.restype = ctypes.c_uint32
+        self.lib.read_2b_reg.argtypes = [
+            ctypes.c_void_p, 
+            ctypes.c_uint8                      
+        ]
+        self.lib.read_8b_reg.restype = ctypes.c_uint16
+        self.lib.read_1b_reg.argtypes = [
+            ctypes.c_void_p,      
+            ctypes.c_uint8,                     
+            ctypes.c_uint8  # is_high
+        ]
+        self.lib.read_1b_reg.restype = ctypes.c_uint8
+        self.lib.read_rflags.argtypes = [ctypes.c_void_p]
         self.lib.read_rflags.restype = ctypes.c_uint32
-        self.lib.read_rflags.argtypes = []
+        self.lib.read_trap_flag.argtypes = [ctypes.c_void_p]
+        self.lib.read_trap_flag.restype = ctypes.c_int
+        self.lib.read_carry_flag.argtypes = [ctypes.c_void_p]
+        self.lib.read_carry_flag.restype = ctypes.c_int
+        self.lib.read_zero_flag.argtypes = [ctypes.c_void_p]
+        self.lib.read_zero_flag.restype = ctypes.c_int        
+        self.lib.read_sign_flag.argtypes = [ctypes.c_void_p]
+        self.lib.read_sign_flag.restype = ctypes.c_int 
+        self.lib.read_overflow_flag.argtypes = [ctypes.c_void_p]
+        self.lib.read_overflow_flag.restype = ctypes.c_int 
+        self.lib.write_rflags.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint32                 # value
+        ]
+        self.lib.exch_rflag.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint8                 # flag_id
+        ]
+        self.lib.set_trap_flag.argtypes = [ctypes.c_void_p]
 
-
-    #-------------------
+    #------------------
     # Register Writing
-    #-------------------
+    #------------------
 
     def write_reg(self, expression: str, value: int, signed: bool = False) -> None:
         """
@@ -147,9 +121,9 @@ class Registers_Interface:
         self.lib.write_reg(reg_id, value, reg_size, self.is_high(expression))
         self.lib.set_reg_sign(reg_id, 1 if signed else 0)
 
-    #-------------------
+    #------------------
     # Register Reading
-    #-------------------
+    #------------------
 
     def read_reg(self, expression: str) -> int:
         """
@@ -170,7 +144,7 @@ class Registers_Interface:
             reg_id = next((i for i, key in enumerate(self.REGISTERS_MAP) if key == reg_info[0]), -1)
         except StopIteration:
             raise ValueError(f"REGISTER {expression} DOES NOT EXIST.")
-        
+        # Because int is unbounded in python this is safe
         value: int =  self.match_read(reg_id, reg_size, self.is_high(expression))
 
         if self.lib.is_signed(reg_id) == 1:
@@ -179,6 +153,11 @@ class Registers_Interface:
             if value & (1 << (bits - 1)):
                 value -= (1 << bits)
         return value
+    
+
+# ---------
+# Helpers
+# ---------
 
     def get_register_parent(self, expression: str) -> tuple[str,int]:
         """
@@ -211,7 +190,7 @@ class Registers_Interface:
     
     def is_high(self, expression:str ) -> int:
         """
-        Verifies if the expression referes to the second eight bytes of a register based on its expression.
+        Verifies if the expression refers to the second eight bytes of a register based on its expression.
 
         :param expression: Name of the register to use
         :type expression: str
