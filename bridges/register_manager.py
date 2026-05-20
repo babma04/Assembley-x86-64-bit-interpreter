@@ -225,27 +225,64 @@ class Registers_Interface:
 
     # TO IMPLEMENT
     ## CURRENT PLAN IT TO ADD A STEP VERIFICATION STEP THAT VERIFIES ALL FLAGS IN THE CONTROL UNIT AND THEN CALLS THE APPROPRIATE FUNCTION IN THE C STRUCTURE TO UPDATE THE FLAGS IN THE CPU STATE STRUCTURE.
-    def read_flags(self) -> int:
+    def read_flags(self) -> bytes:
         """
         Reads the value of the flags register in the c structure file.
-        :return: Value of the flags register
-        :rtype: int
         """
-        return int(self.lib.read_rflags())
+        return bytes(self.lib.read_rflags(self.regs))
     
-    def read_trap_flag(self) -> int:
+    def read_trap_flag(self) -> bool:
         """
         Reads the value of the trap flag in the c structure file.
         :return: Value of the trap flag
         :rtype: int
         """
-        return int(self.lib.read_trap_flag())
+        return True if int(self.lib.read_trap_flag()) == 1 else False
     
-    def set_trap_flag(self, value: int) -> None:
+    def Exch_trap_flag(self) -> None:
         """
-        Sets the value of the trap flag in the c structure file.
-        :param value: Value to set the trap flag to
-        :type value: int
+        Exchanges the value of the trap flag in the c structure file.
         """
-        self.lib.set_trap_flag(value)
+        self.lib.set_trap_flag(self.regs)
+
+    def read_carry(self) -> bool:
+        """
+        Reads the value of the carry flag in the c structure file and returns its value as a bool
+        """
+        return True if int(self.lib.read_carry_flag(self.regs)) == 1 else False
+    
+    def read_overflow(self) -> bool:
+        """
+        Reads the value of the overflow flag in the c structure file and returns its value as a bool
+        """
+        return True if int(self.lib.read_overflow_flag(self.regs)) == 1 else False
+    
+    def read_zero(self) -> bool:
+        """
+        Reads the value of the zero flag in the c structure file and returns its value as a bool
+        """
+        return True if int(self.lib.read_zero_flag(self.regs)) == 1 else False
+    
+    def read_sign(self) -> bool:
+        """
+        Reads the value of the sign flag in the c structure file and returns its value as a bool
+        """
+        return True if int(self.lib.read_sign_flag(self.regs)) == 1 else False
+    
+    def exch_flag(self, flag_id: int) -> None:
+        """
+        Exchanges the value of a given flag according to its id on the flag register
+
+        :param flag_id: index of the flag to exch in the flags register
+        :type: int
+        :raises ValueError: if the flag_id given is invalid
+        """
+        if (flag_id < 0 or flag_id > 31) : 
+            raise ValueError
+        f_id: ctypes.c_uint8 = ctypes.c_uint8(flag_id)
+        self.lib.exch_rflags(self.regs, f_id)
+
+    def write_flags(self, value: int) -> None:
         
+        v: ctypes.c_uint32 = ctypes.c_uint32(value)
+        self.lib.write_rflags(self.regs, v)
