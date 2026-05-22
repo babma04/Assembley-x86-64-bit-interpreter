@@ -66,7 +66,7 @@ class Storage:
     @staticmethod
     def save_file_dictionary(file_name :str, data :dict[str, str | dict[str, int]]) -> None:
         """
-        Save dicitonaries to a JSON file in the project folder.
+        Save dictionaries to a JSON file in the project folder.
         File name must have the json extension.
 
         :param file_name: The full name of a new file.
@@ -104,7 +104,7 @@ class Storage:
             with open(file_path) as f:
                 return f.read()
         except FileNotFoundError:
-            print(f"Something went wrong! File {file_name} cound't be opened.\n     Exiting program...\n")
+            print(f"Something went wrong! File {file_name} couldn't be opened.\n     Exiting program...\n")
             sys.exit(-1)
     
 

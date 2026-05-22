@@ -31,7 +31,7 @@ class Segment_Mapper:
     __slots__ = (
         'stack_limit', 'memory_list', 'rodata_segment', 'data_segment', 
         'bss_segment', 'labels', 'constants', 'file_name', 
-        'memory', 'stack_pointer', 'valid_start', 'rip'
+        'memory', 'stack_pointer', 'valid_start', 'rip', 'registers'
     )
 
     # Directives for size identification and memory allocation verification
@@ -88,8 +88,6 @@ class Segment_Mapper:
         self.stack_limit :int = stack_limit
         # Requires a 'start' label to be changed or will quit the program
         self.valid_start: str = Storage.read_valid_start(validation_file_name)
-        # Value will be changed while parsing .text section
-        self.rip: int = -1 # default invalid value
 
 
         # ---------------
@@ -98,20 +96,28 @@ class Segment_Mapper:
 
         # File name holder (After conversion to a parsable json file)
         self.file_name: str = Storage.convert_to_json(file_name)
-
+        # Value will be changed while parsing .text section
+        self.rip: int = -1 # default invalid value
         # Memory used in the execution of the program
         self.memory_list :list[list[str]]= []
         
+        # ---------------------------------------
         #(CURRENT UPDATE WILL MAKE THIS OBSOLETE)
         # Should only store addresses as actually memory values are stored in Data_Memory class
         self.rodata_segment: DataSectionInfo = {}
         self.data_segment: DataSectionInfo = {}
         self.bss_segment: BssSectionInfo = {}
+        # ---------------------------------------
 
         self.labels: LabelMap = {}
         self.constants: ConstantMap = {}     # Stores constant values
 
-        self.memory: Data_Memory = self.load_program(self.file_name)
+        # Register handler class instance
+        self.registers: Registers_Interface = Registers_Interface()
+        # Memory handler class instance 
+        self.memory: Data_Memory = Data_Memory(self.registers, self.RODATA_BASE)
+        
+        self.load_program(self.file_name)
         
         # Writes the stack in memory (Currently also uses the paging system but might be changed in to a stack system)
         self.stack_pointer: int = self.initialize_stack(argvcount, argv, self.memory, self.stack_limit)
@@ -120,7 +126,7 @@ class Segment_Mapper:
     # -----------------------
     # PROGRAM LOADING
     # -----------------------
-    def load_program(self, file_name: str) -> Data_Memory:
+    def load_program(self, file_name: str) -> None:
         """
         Loads the program into 'usable memory' and loads
         a json file with each line of relevant code properly separated
@@ -141,8 +147,7 @@ class Segment_Mapper:
             self.memory_list.append(tokens)
         
         Storage.save_file(file_name, self.memory_list)
-        # Returns a non-initialized Data_memory object for parsing
-        return Data_Memory(self.RODATA_BASE)
+        
     
 
     def parse_section(self) -> None:
