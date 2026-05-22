@@ -16,4 +16,8 @@ __pycache__/
 .vscode/
 .idea/
 
+# Specific file for testing
+/tests/test_env.py
+
+
 NVIM FOR THE WIN
