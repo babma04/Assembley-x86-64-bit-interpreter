@@ -27,7 +27,8 @@ class Segment_Mapper:
     :type stack_limit: int
     :return: None
     """
-    # Memory footprint optimization (TODO)
+
+    # Memory footprint optimization 
     __slots__ = (
         'stack_limit', 'memory_list', 'rodata_segment', 'data_segment', 
         'bss_segment', 'labels', 'constants', 'file_name', 
@@ -35,10 +36,22 @@ class Segment_Mapper:
     )
 
     # Directives for size identification and memory allocation verification
-    DIRECTIVES = {
+    SIZE_DIRECTIVES = {
         'db': (1, True), 'dw': (2, True), 'dd': (4, True), 'dq': (8, True),
         'resb': (1, False), 'resw': (2, False), 'resd': (4, False), 'resq': (8, False)
     }
+
+    MASKS_DIRECTIVES = {
+        'byte': 0xFF, 'word': 0xFFFF, 'dword': 0xFFFFFFFF, 'qword': 0xFFFFFFFFFFFFFFFF
+    }
+
+    # Architecture Constants for sections start and memory allocation
+    TEXT_BASE = 0x400000
+    RODATA_BASE = 0x500000
+    DATA_BASE = 0x600000
+    BSS_BASE = 0x700000
+    STACK_START = 0x7fffffffe000
+
 
     TOKENS_PATTERN = r"""(?x)
         ".*?"|'.*?'|                  # Strings
@@ -53,17 +66,24 @@ class Segment_Mapper:
 
     ELEMENTS_TO_SKIP = r'^[,\s]+$'  # Commas and whitespace to skip during parsing
 
-    # Patterns to use in the parsing of constants
+    
+    # -----------------------------
+    # Pattern-Matching Expressions
+    # -----------------------------
+
+    COMPONENTS_ADDRESSING_PATTERN = r'(0x[\da-fA-F]+|[a-zA-Z_][a-zA-Z0-9_]*|\d+)'
+    GENERAL_PURPOSE_REGISTERS_PATTERN = r'([er]?[abcd]x|[er]?[sb]p|[er]?[sd]i|[er]?ip|r[89][bdlw]?|r1[0-5][bdlw]?|[abcd][hl])'
+    FPU_REGISTERS_PATTERN = r'(ymm[0-9]|xmm[0-9]|ymm1[0-5]|xmm1[0-5])'
     NUMBER_REPRESENTATION_PATTERN = r'(0x[\da-fA-F]+|\d[\da-fA-F]*h|0b[01]+|[01]+b|0d\d+|[-+]?\d+d|[0-7]+[oq]|[-+]?\d+)'
     WORD_OR_CHARACTERS_PATTERN = r'(\".*?\"|\'.*?\')'
     IMMEDIATE_VALUE_PATTERN = fr'({NUMBER_REPRESENTATION_PATTERN}|{WORD_OR_CHARACTERS_PATTERN})'
+    REGISTER_PATTERN = fr'{GENERAL_PURPOSE_REGISTERS_PATTERN}|{FPU_REGISTERS_PATTERN}'
+    CONSTANTS_AND_LABELS_PATTERN = r'\b[a-zA-Z_]\w*\b'
+    DIRECT_AND_BASE_ADDRESSING_PATTERN = fr'^\[(?:\s*){COMPONENTS_ADDRESSING_PATTERN}(?:\s)*([\+\-](?:\s)*{COMPONENTS_ADDRESSING_PATTERN})*(?:\s)*\]$'
+    INDEXED_ADDRESSING_PATTERN = fr'^\[(?:\s*){COMPONENTS_ADDRESSING_PATTERN}(?:\s)*([\+\-\*](?:\s)*{COMPONENTS_ADDRESSING_PATTERN})*(?:\s)*\]$'
+    MEMORY_ADDRESSING_PATTERN = fr'^{INDEXED_ADDRESSING_PATTERN}|{DIRECT_AND_BASE_ADDRESSING_PATTERN}$'
+    OPERAND_PATTERN = fr'{MEMORY_ADDRESSING_PATTERN}|{REGISTER_PATTERN}|{IMMEDIATE_VALUE_PATTERN}{CONSTANTS_AND_LABELS_PATTERN}'
     
-    # Architecture Constants for sections start and memory allocation
-    TEXT_BASE = 0x400000
-    RODATA_BASE = 0x500000
-    DATA_BASE = 0x600000
-    BSS_BASE = 0x700000
-    STACK_START = 0x7fffffffe000
 
 
     def __init__(self, file_name: str, argvcount: int = 0, argv: list[str] | None = None, validation_file_name: str = "valid_instructions.json", stack_limit: int = 0x7fff00000000) -> None:
@@ -138,7 +158,7 @@ class Segment_Mapper:
         :rtype: Data_Memory
         """
         program_lines: list[str] = Storage.load_file_lines(file_name)
-        # List comprehension for usable memory initialization
+        # List for usable memory initialization
         self.memory_list = []
         for line in program_lines:
             code_part: str = line.split(";")[0].strip()
@@ -151,7 +171,9 @@ class Segment_Mapper:
     
 
     def parse_section(self) -> None:
-
+        """
+        TODO
+        """
         # Pointers for lines of usable memory and address at use from a Data_memory object
         index: int = 0
         current_rip: Address = Segment_Mapper.RODATA_BASE
@@ -276,7 +298,7 @@ class Segment_Mapper:
         :rtype: Address
         """
         times: int = int(line[2])
-        number_of_bytes: int = self.DIRECTIVES[line[3]][0]
+        number_of_bytes: int = self.SIZE_DIRECTIVES[line[3]][0]
         size: int = number_of_bytes * times
         addresses: list[Address] = []
 
@@ -309,7 +331,7 @@ class Segment_Mapper:
         :return: updated pointer to the Address in use to store values in the Data_memory object
         :rtype: Address
         """
-        number_of_bytes: int = self.DIRECTIVES[line[1]][0]
+        number_of_bytes: int = self.SIZE_DIRECTIVES[line[1]][0]
         size: int = number_of_bytes * (len(line) - 2)
         addresses: list[Address] = []
 
@@ -344,7 +366,7 @@ class Segment_Mapper:
         :return: updated pointer to the Address in use to store values in the Data_memory object
         :rtype: Address
         """
-        number_of_bytes: int = self.DIRECTIVES[line[1]][0]
+        number_of_bytes: int = self.SIZE_DIRECTIVES[line[1]][0]
         size: int = number_of_bytes
         addresses: list[Address] = []
 
@@ -375,7 +397,7 @@ class Segment_Mapper:
             if not self.bss_format_validation(tokens, index):
                 sys.exit(-2)
             times: int = int(tokens[2])
-            number_of_bytes: int = self.DIRECTIVES[tokens[1]][0]    
+            number_of_bytes: int = self.SIZE_DIRECTIVES[tokens[1]][0]    
             size: int = number_of_bytes * times
             self.bss_segment[tokens[0]]['size'] = size
 
