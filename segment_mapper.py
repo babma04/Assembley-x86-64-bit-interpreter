@@ -138,6 +138,7 @@ class Segment_Mapper:
         self.memory: Data_Memory = Data_Memory(self.registers, self.RODATA_BASE)
         
         self.load_program(self.file_name)
+        self.load_text()
         
         # Writes the stack in memory (Currently also uses the paging system but might be changed in to a stack system)
         self.stack_pointer: int = self.initialize_stack(argvcount, argv, self.memory, self.stack_limit)
@@ -197,7 +198,7 @@ class Segment_Mapper:
                     current_rip = Segment_Mapper.BSS_BASE
                     current_rip = self.load_bss(current_rip, index)
                 elif section_name.lstrip(".") == "text":
-                    self.load_text(current_rip, index)          # <<current_rip>> is passed if i decide to also start storing instructions in memory, for now IS INACTIVE!!!
+                    return
 
             elif (Segment_Mapper.is_constant(tokens)):
                 self.load_constant(tokens, index)
@@ -445,7 +446,7 @@ class Segment_Mapper:
     # section .text related methods
     # ------------------------------
 
-    def load_text(self, current_rip: Address ,index: int) -> None:               
+    def load_text(self) -> None:               
         """
         Takes care of .text components (methods labels and constants) parsing as well as validation of the start declaration
         
@@ -454,17 +455,40 @@ class Segment_Mapper:
         :param index: index to the line of code 
         :type index: int
         """
-        index += 1
-        tokens: list[str] = self.memory_list[index]
-        validity: int = self.find_start(tokens, self.memory_list[index + 1])
-        if (validity == 1 or validity == -1):
+        index: int = self.skip_to_star()
+        if index == -1:
             print(f"NO VALID GLOBAL {self.valid_start} DECLARATION FOUND. Exiting program...")
             sys.exit(1)
-        index += 1 # Move index to the line after the start declaration
+
         self.rip = index # Set instruction pointer to the line after the start declaration
         self.fetch_labels(index)
         # Exit validation is verified while running
-    
+
+
+    def skip_to_star(self) -> int:
+        """
+        Helper to move load_text to the correct start.\n
+        Should return the index of the line in the json file where the start is declaration
+        
+        :return: Index of the row where start is declared
+        :rtype: int
+        """
+
+        index: int = 0
+        while index < len(self.memory_list):
+            tokens:list[str] = self.memory_list[index]
+
+            # Just for prevention
+            if not tokens: 
+                index += 1
+                continue
+
+            elif tokens[1].lower == self.valid_start and self.find_start(tokens, self.memory_list[index + 1]) == -1 or self.find_start(tokens, self.memory_list[index + 1]) == 0:
+                return index + 1
+            
+            index += 1
+        return -1
+
     def find_start(self, line: list[str], next_line: list[str]) -> int:
         """
         Validates the existence of a valid start declaration
@@ -483,7 +507,6 @@ class Segment_Mapper:
         else: return 0
         
     def fetch_labels(self, index: int) -> None:
-
         """
         Takes care of the label initialization with all labels present in the code passed to the execution.\n
         Also verifies if any of the lines is a constant declaration and redirects the execution to the appropriate method
