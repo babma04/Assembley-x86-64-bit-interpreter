@@ -139,9 +139,7 @@ class Segment_Mapper:
         
         self.load_program(self.file_name)
         self.load_text()
-        
-        # Writes the stack in memory (Currently also uses the paging system but might be changed in to a stack system)
-        self.stack_pointer: int = self.initialize_stack(argvcount, argv, self.memory, self.stack_limit)
+        self.initialize_stack(argvcount, argv, self.memory, self.stack_limit)
         self.parse_section()
 
     # -----------------------
@@ -664,7 +662,7 @@ class Segment_Mapper:
         # |_[0]
         # |_[argc] <--- stack pointer at initialize_stack return
 
-    def initialize_stack(self, argvcount: int, argv: list[str] | None, memory: Data_Memory, stack_limit: int, stack_start: int=STACK_START) -> int:
+    def initialize_stack(self, argvcount: int, argv: list[str] | None, memory: Data_Memory, stack_limit: int, stack_start: int=STACK_START) -> None:
         """
         Initializes the stack with argc and argv values as well as argument strings.
 
@@ -681,10 +679,10 @@ class Segment_Mapper:
         :return: final value of the sack pointer after the initializations
         :rtype: int
         """
-        memory.stack_pointer = stack_start
+        self.registers.write_reg("rsp", stack_start, False)
         # Step 1: push argument strings
         if argv is not None:
-            argv_addrs = self.push_arguments(argv)
+            argv_addrs: list[int] = self.push_arguments(argv)
             # Step 2: push argument pointers
             for addr in argv_addrs:
                 self.memory.push(addr.to_bytes(8, "little"))
@@ -693,8 +691,8 @@ class Segment_Mapper:
         memory.push(argvcount.to_bytes(8, "little"))
         # Step 4: align the stack and verify its size
         self.align_stack(memory, stack_limit)
-        self.check_stack_limit(memory, stack_limit)
-        return memory.stack_pointer
+        self.check_stack_limit(self.registers.read_reg("rsp"), stack_limit)
+        
 
     def push_arguments(self, argv: list[str]) -> list[int]:
         """
@@ -708,14 +706,13 @@ class Segment_Mapper:
         """
         addresses :list[int] = []
         for arg in reversed(argv):
-            data: bytes = arg.encode('utf-8') + b'\x00'
-            size: int = ((len(data)+7) // 8) * 8     # Directly pass it as a valid multiple of the stack's cell size
-            self.memory.stack_pointer -= size
-            addr: int = self.memory.stack_pointer
-            self.memory.write_bytes(addr, size, data)
-            addresses.append(addr)
+            arg_bytes = arg.encode('utf-8') + b'\x00'
 
-        self.memory.push((0).to_bytes(8, "little"))
+            for char in reversed(arg_bytes):
+                single_byte: bytes = bytes([char])
+                self.memory.push(single_byte)
+            addresses.append(self.registers.read_reg("rsp"))
+        self.memory.push(b"\x00")
         return addresses
 
     def align_stack(self, memory: Data_Memory, stack_limit: int) -> None:
@@ -727,16 +724,18 @@ class Segment_Mapper:
         :param stack_limit: maximum value the stack pointer can reach
         :type stack_limit: int
         """
-        misalignment: int = memory.stack_pointer % 16
+        rsp: int = self.registers.read_reg("rsp")
+        misalignment: int = rsp % 16
         if misalignment != 0:
-            memory.stack_pointer -= misalignment
+            rsp -= misalignment
             try:
-                self.check_stack_limit(memory, stack_limit)
+                self.check_stack_limit(rsp, stack_limit)
+                self.registers.write_reg("rsp", rsp, False)
             except OverflowError as e:
                     print(e)
                     sys.exit(16)
 
-    def check_stack_limit(self, memory: Data_Memory, stack_limit: int) -> None:
+    def check_stack_limit(self, rsp: int, stack_limit: int) -> None:
         """
         Check if the current stack pointer is below the minimum allowed.\n
         Raises an exception if stack overflow occurs.
@@ -747,9 +746,9 @@ class Segment_Mapper:
         :type stack_limit: int
         :raises OverflowError: if stack overflow occurs
         """
-        if memory.stack_pointer < stack_limit:
+        if rsp < stack_limit:
             raise OverflowError(
-                f"Stack overflow: stack pointer {hex(memory.stack_pointer)} "
+                f"Stack overflow: stack pointer {hex(rsp)} "
                 f"below minimum allowed {hex(stack_limit)}"
             )
 
@@ -840,11 +839,11 @@ class Segment_Mapper:
         if isinstance(value, str):
             encoded_value: bytes = (value.encode())[:specifier].ljust(specifier, b'\x00')
             for i in range(times):
-                memory.write_bytes(current_rip + i*specifier, specifier, encoded_value)
+                memory.write_bytes(current_rip + i*specifier, encoded_value, specifier)
         else:
             byte_value: bytes = value.to_bytes(specifier, "little")
             for i in range(times):
-                memory.write_bytes(current_rip + i*specifier, specifier, byte_value)
+                memory.write_bytes(current_rip + i*specifier, byte_value, specifier)
 
     
     @staticmethod

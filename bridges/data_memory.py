@@ -159,8 +159,8 @@ class Data_Memory:
         """
         rsp = self.registers.read_reg('rsp')
         # Check for stack overflow before pushing
-        if rsp < self.STACK_LIMIT:
-            raise MemoryError("Stack overflow: cannot push more data onto the stack.")
+        if rsp - 8 < self.STACK_LIMIT:
+            raise MemoryError("Stack overflow: cannot push more data to the stack.")
         # Ensure the value is exactly 8 bytes, padding with zeros if necessary, or truncating if it's too long
         elif len(value) < 8:
             value = self.get_valid_data(value, 8)
