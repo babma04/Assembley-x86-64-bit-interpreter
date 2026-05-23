@@ -17,7 +17,6 @@ __pycache__/
 .idea/
 
 # Specific file for testing
-/tests/test_env.py
-
+# Nothing for now
 
 NVIM FOR THE WIN
