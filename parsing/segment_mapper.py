@@ -52,6 +52,9 @@ class Segment_Mapper:
     BSS_BASE = 0x700000
     STACK_START = 0x7fffffffe000
 
+    # -----------------------------
+    # Pattern-Matching Expressions
+    # -----------------------------
 
     TOKENS_PATTERN = r"""(?x)
         ".*?"|'.*?'|                  # Strings
@@ -63,27 +66,11 @@ class Segment_Mapper:
         [a-zA-Z_]\w*|                 # Instructions / Registers / Labels
         [-+]?\d+                      # Signed Decimals
     """
-
     ELEMENTS_TO_SKIP = r'^[,\s]+$'  # Commas and whitespace to skip during parsing
 
-    
-    # -----------------------------
-    # Pattern-Matching Expressions
-    # -----------------------------
-
-    COMPONENTS_ADDRESSING_PATTERN = r'(0x[\da-fA-F]+|[a-zA-Z_][a-zA-Z0-9_]*|\d+)'
-    GENERAL_PURPOSE_REGISTERS_PATTERN = r'([er]?[abcd]x|[er]?[sb]p|[er]?[sd]i|[er]?ip|r[89][bdlw]?|r1[0-5][bdlw]?|[abcd][hl])'
-    FPU_REGISTERS_PATTERN = r'(ymm[0-9]|xmm[0-9]|ymm1[0-5]|xmm1[0-5])'
     NUMBER_REPRESENTATION_PATTERN = r'(0x[\da-fA-F]+|\d[\da-fA-F]*h|0b[01]+|[01]+b|0d\d+|[-+]?\d+d|[0-7]+[oq]|[-+]?\d+)'
     WORD_OR_CHARACTERS_PATTERN = r'(\".*?\"|\'.*?\')'
     IMMEDIATE_VALUE_PATTERN = fr'({NUMBER_REPRESENTATION_PATTERN}|{WORD_OR_CHARACTERS_PATTERN})'
-    REGISTER_PATTERN = fr'{GENERAL_PURPOSE_REGISTERS_PATTERN}|{FPU_REGISTERS_PATTERN}'
-    CONSTANTS_AND_LABELS_PATTERN = r'\b[a-zA-Z_]\w*\b'
-    DIRECT_AND_BASE_ADDRESSING_PATTERN = fr'^\[(?:\s*){COMPONENTS_ADDRESSING_PATTERN}(?:\s)*([\+\-](?:\s)*{COMPONENTS_ADDRESSING_PATTERN})*(?:\s)*\]$'
-    INDEXED_ADDRESSING_PATTERN = fr'^\[(?:\s*){COMPONENTS_ADDRESSING_PATTERN}(?:\s)*([\+\-\*](?:\s)*{COMPONENTS_ADDRESSING_PATTERN})*(?:\s)*\]$'
-    MEMORY_ADDRESSING_PATTERN = fr'^{INDEXED_ADDRESSING_PATTERN}|{DIRECT_AND_BASE_ADDRESSING_PATTERN}$'
-    OPERAND_PATTERN = fr'{MEMORY_ADDRESSING_PATTERN}|{REGISTER_PATTERN}|{IMMEDIATE_VALUE_PATTERN}{CONSTANTS_AND_LABELS_PATTERN}'
-    
 
 
     def __init__(self, file_name: str, argvcount: int = 0, argv: list[str] | None = None, validation_file_name: str = "valid_instructions.json", stack_limit: int = 0x7fff00000000) -> None:

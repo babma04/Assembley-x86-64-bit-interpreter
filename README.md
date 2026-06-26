@@ -176,32 +176,35 @@ Valid exit codes:
 
     CPU_SIMULATOR/
     |
-    |-- bridges/            # Bridges between the c files and the python classes
-    |    |-- __init__.py
-    |    |-- data_memory.py
-    |    |-- register_manager.py
-    |-- helpers/            # Helpers for storage and types definition in python
+    |-- helpers/                # Helpers for storage and types definition in python
     |    |-- __init__.py
     |    |-- my_types.py
     |    |-- storage.py
-    |-- include/            # c headers
-    |    |-- memory_eng.h
-    |    |-- registers.h
-    |    |-- operations.h
-    |-- src/                # c implementations
-    |    |-- memory_eng.c
-    |    |-- registers.c
-    |    |-- operations.c
-    |-- tests/              # tests (TODO)
-    |-- alu.py
-    |-- control_unit.py
-    |-- data_path.py
-    |-- fpu.py
-    |-- segment_mapper.py
+    |-- bridges/                # Bridges between the c files and the python classes
+    |    |-- __init__.py
+    |    |-- data_memory.py
+    |    |-- register_manager.py
+    |-- FUs/                     # Functional units implementations
+    |    |-- alu.py
+    |    |-- data_path.py
+    |    |-- fpu.py
+    |-- execution/
+    |    |-- include/            # c headers
+    |    |    |-- memory_eng.h
+    |    |    |-- registers.h
+    |    |    |-- operations.h
+    |    |-- src/                # c implementations
+    |    |    |-- memory_eng.c
+    |    |    |-- registers.c
+    |    |    |-- operations.c
+    |-- parsing/                 # Parsing class and interpretation loop
+    |    |-- control_unit.py
+    |    |-- segment_mapper.py
+    |-- tests/                   # tests (TODO)
     |-- main.py
     |-- .gitignore
     |-- Makefile
-    |-- README.md
+    |-- README.md                # (This)
 
 ---
 

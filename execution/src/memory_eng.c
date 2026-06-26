@@ -59,6 +59,7 @@ void free_table(Table* table)
  * * Should initialize the Table structure if it's not yet created.
  * * Used to handle reads and writes as well as manage page creation if needed.
  * 
+ * @param CR3 Pointer to the Table structure representing the root of the paging structure
  * @param v_addr Virtual address given by the caller
  * @param create_page Flags for the operation type (0 - for read; 1 - for write)
  * @return Pointer to the physical byte, or NULL if unmapped and create_page is 0
@@ -142,6 +143,7 @@ uint8_t *decompose_address (Table *CR3, uint64_t v_addr, uint8_t create_page)
  * * Handles page crossing by checking if the write stays within the 4KB boundary.
  * * If the amount of bytes to write is grater than one uses the write_block function to handle the write operation.
  * 
+ * @param table Pointer to the Table structure representing the root of the paging structure
  * @param v_addr Virtual address given by the caller
  * @param data Pointer to the data to write
  * @param size Size of the data to write in bytes (1,2,4,8)
@@ -168,6 +170,7 @@ int write_mem (Table* table, uint64_t v_addr, uint8_t *data, uint8_t size, uint8
  * @brief Writes a block of data to virtual memory.
  * * Handles page crossing by checking if the write stays within the 4KB boundary.
  * 
+ * @param table Pointer to the Table structure representing the root of the paging structure
  * @param v_addr Virtual address where the block should be written
  * @param data Pointer to the block of data to be written
  * @param size Size of the data block in bytes
@@ -205,6 +208,7 @@ int write_block (Table* table, uint64_t v_addr, uint8_t *data, uint8_t size, uin
  * * Handles page crossing by checking if the read stays within the 4KB boundary.
  * * If the amount of bytes to read is grater than one uses the read_block function to handle the read operation.
  * 
+ * @param table Pointer to the Table structure representing the root of the paging structure
  * @param v_addr Virtual address given by the caller
  * @param buffer Pointer to the memory block where the result is expected to be given if it is found
  * @param size Size of the data block to be read in bytes
@@ -228,6 +232,7 @@ int read_mem (Table* table, uint64_t v_addr, uint8_t *buffer, uint8_t size)
  * @brief Reads a block of data from virtual memory.
  * * Handles page crossing by checking if the read stays within the 4KB boundary.
  * 
+ * @param table Pointer to the Table structure representing the root of the paging structure
  * @param v_addr Virtual address where the block should be read from
  * @param buffer Pointer to the buffer where the read data should be stored
  * @param size Size of the data block to be read in bytes
