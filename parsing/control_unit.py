@@ -130,7 +130,7 @@ class Control_Unit:
     def fetch(self) -> None:
         """
         Fetches the current instruction and its operands from the text section based on the instruction pointer (RIP).\n
-        Sets the current instruction and current funtional unit in use and validates and sets the operands and its size.
+        Sets the current instruction and current functional unit in use and validates and sets the operands and its size.
         Raises a ValueError if the instruction is invalid or if the operands are invalid.        
         
         :return: None
@@ -144,7 +144,7 @@ class Control_Unit:
             return 
         # Verifies if the line is an instruction and sets the instruction, f.u. in use and operand info needed for execution (size, type, value, address)
         elif self.is_valid_instruction(line[0]):
-            self.curretent_instruction = line[0]
+            self.current_instruction = line[0]
 
             # This block might raise an exception if it ran into bad syntax or impossible operations/operands
             try:
@@ -162,7 +162,7 @@ class Control_Unit:
             else:
                 # If incompatible reset all info to a Null value and raise an exception
                 self.set_operand("both", None, 0)
-                raise ValueError(f"INVALID OPERAND COUNT FOR INSTRUCTION {self.curretent_instruction} AT LINE {self.rip}!")
+                raise ValueError(f"INVALID OPERAND COUNT FOR INSTRUCTION {self.current_instruction} AT LINE {self.rip}!")
         
         # If the instruction wasn't found, raise an excpetion
         else:
@@ -178,7 +178,7 @@ class Control_Unit:
         if self.current_fu == "cpu":
             if self.current_instruction == "syscall":
                 self.syscall()
-            elif self.curretent_instruction == "call":
+            elif self.current_instruction == "call":
                 self.call()
         else:
             current_fu: FU = self.get_current_fu()
@@ -208,17 +208,17 @@ class Control_Unit:
 
     def is_valid_instruction(self, instruction: str) -> bool:
         """
-        Verifies if a given instruction is supported by the program and if so sets the current funtional unit in use.\n
-        Enables syscalls and funtion calls methods taken care by this class.
+        Verifies if a given instruction is supported by the program and if so sets the current functional unit in use.\n
+        Enables syscalls and function calls methods taken care by this class.
 
         :param instruction: Instruction in verification
         :type instruction: str
         :return: True if the instruction is present in the valid_instructions.json file
         :rtype: bool
         """
-        for funtional_units in self.valid_instructions.keys():
-            if instruction in self.valid_instructions[funtional_units]:
-                self.current_fu = funtional_units
+        for functional_units in self.valid_instructions.keys():
+            if instruction in self.valid_instructions[functional_units]:
+                self.current_fu = functional_units
                 return True
             elif instruction == "syscall":
                 self.current_fu = "cpu"
@@ -254,7 +254,7 @@ class Control_Unit:
             except ValueError as e:
                 print(e)
                 sys.exit(...)
-            raise ValueError(f"INVALID SYNTAX FOR INSTRUCTION {self.curretent_instruction} AT LINE {self.rip}!")
+            raise ValueError(f"INVALID SYNTAX FOR INSTRUCTION {self.current_instruction} AT LINE {self.rip}!")
         
         else:
             # If none of the above cases are triggered try to parse the operands and sizes
@@ -275,8 +275,8 @@ class Control_Unit:
         :return: True if the current operand count is valid for the current instruction
         :rtype: bool
         """
-        # Gets the number of expected arguiments of an instruction based on the valid_instructions.json file
-        expected_operand_count: int = self.valid_instructions[self.current_fu][self.curretent_instruction]
+        # Gets the number of expected arguments of an instruction based on the valid_instructions.json file
+        expected_operand_count: int = self.valid_instructions[self.current_fu][self.current_instruction]
         # Gets the number of operands in use for for the current instruction   
         actual_operand_count: int = 0
         if self.op1 != None:
@@ -493,17 +493,17 @@ class Control_Unit:
 
     def get_operand_info(self, line: list[str]) -> list[str]:
         """
-        Dinamically parses the operand declarations of an instruction.\n
+        Dynamically parses the operand declarations of an instruction.\n
         Tries to match size key words and skips over the expected operand, if it finds one else raises an exception. Also tries to match unspecified sized operands and tries to get their size (if register).
-        If doesnt match either a size keyword or an operand format raises a SyntaxError.\n
+        If doesn't match either a size keyword or an operand format raises a SyntaxError.\n
         Returns pairs of sizes and operand expressions used in the declaration as list elements (always 4 elements but the sizes could be '""')
         
         :param line: Line of code in which the operands are declared without the instruction previously removed
         :type line: list[str]
         :return: List os size and operand expression pairs always following the format: [size;op2;size;op1]
         :rtype: list[str]
-        :raises SyntaxError: If comes accross an invalid syntax format for assembly x86-64bit code
-        :raises ValueError: If comes accross a software bug (Unexpected but preventive)
+        :raises SyntaxError: If comes across an invalid syntax format for assembly x86-64bit code
+        :raises ValueError: If comes across a software bug (Unexpected but preventive)
         """
         ret_list: list[str] = []
         max_ret_value: int = 3  # 4 list elements
@@ -528,7 +528,7 @@ class Control_Unit:
                     i += 1
                     max_ret_value -= 2
             elif re.match(fr'^({self.OPERAND_PATTERN})$',line[i-length]):
-                # If a match with an operand happened append it to the list and trys to get its size (if register), else appends a null size to the list to calculate/get later
+                # If a match with an operand happened append it to the list and tries to get its size (if register), else appends a null size to the list to calculate/get later
                 ret_list[max_ret_value] = line[i]
                 if self.is_register(line[i]):
                     try:
@@ -575,8 +575,8 @@ class Control_Unit:
     def get_operation_size(self) -> int:
         """
         Returns the size of the current operation to be executed, meaning the size of the biggest of the operands.\n
-        Will always return the biggestof the sizes in the current execution context.
-        To be used in contexts of constants or immidiate value parsing where size is not specified but needted for byte transformations of integer values.
+        Will always return the biggest of the sizes in the current execution context.
+        To be used in contexts of constants or immediate value parsing where size is not specified but needed for byte transformations of integer values.
     
         
         :return: The size of the biggest operand in the current instruction
@@ -592,7 +592,7 @@ class Control_Unit:
         :type register: str
         :return: Size in number of bytes of the given register
         :rtype: int
-        :raises SyntaxError: If no register match happend (Fail safe mechanism)
+        :raises SyntaxError: If no register match happen (Fail safe mechanism)
         """
         register = register.lower()
 
@@ -710,10 +710,10 @@ class Control_Unit:
     
     def get_current_fu(self) -> FU:
         """
-        Returns the object to the current funtional unit in use
+        Returns the object to the current functional unit in use
 
-        :return: Funtional unit object at use
-        :rtype: FU (Type Aliase for all funtional unit types)
+        :return: Functional unit object at use
+        :rtype: FU (Type Alias for all functional unit types)
         """
         if self.current_fu == "cpu":
             return self.data_path
@@ -722,7 +722,7 @@ class Control_Unit:
         elif self.current_fu == "fpu":
             return self.fpu
         else:
-            raise ValueError("NO FUNTIONAL UNIT FOUND.\n Exiting program...")
+            raise ValueError("NO FUNCTIONAL UNIT FOUND.\n Exiting program...")
             
     #-------------------------
     # Operand type validation
@@ -786,7 +786,7 @@ class Control_Unit:
         :rtype: bool
         :raises ValueError: If an invalid label is found in the expression
         """
-        # If the expression has the memory address brakets it is not an address
+        # If the expression has the memory address brackets it is not an address
         if expression.startswith('[') and expression.endswith(']'):
             return False
         # Assuming it is an address, tries to match the components valid in an address declaration declaration and verify if they are valid
@@ -843,11 +843,11 @@ class Control_Unit:
     def parse_operand_info(self, op_info: list[str]) -> None:
         """
         Attributes the size and expression value of each operand to the respective instances of this class.\n
-        If comes accross a non declared size and there are no registers in the instruction raises SyntaxError. If any of the expressions for the operands are not set raises ValueError
+        If comes across a non declared size and there are no registers in the instruction raises SyntaxError. If any of the expressions for the operands are not set raises ValueError
         
         :param op_info: List with the size and expression of each operand as a pair in the format: [size;op2;size;op1]
         :type op_info: list[str]
-        :raises SyntaxError: If comes accross undeclared sizes with out registers in the instruction.
+        :raises SyntaxError: If comes across undeclared sizes with out registers in the instruction.
         :raises ValueError: If any of the operand expressions are not set.
         """
         # Fail safe verification
@@ -886,7 +886,7 @@ class Control_Unit:
 
     def parse_address_expression(self, components: list[str], expression: str) -> list[str]:
         """
-        Returns a parsed list equivelent to the one given but with all labels and constants substituted by their address (labels) or values (constants)
+        Returns a parsed list equivalent to the one given but with all labels and constants substituted by their address (labels) or values (constants)
 
         :param components: Operand declaration in an instruction to be parsed to integer values
         :type components: list[str]
@@ -1016,7 +1016,7 @@ class Control_Unit:
 
     def syscall(self) -> None:
         """
-        Reproduces syscall behaviour accordingly to the values of certain registers
+        Reproduces syscall behavior accordingly to the values of certain registers
         """
         rax: int = self.registers.read_reg("rax")
         rdi: int = self.registers.read_reg("rdi")
@@ -1122,12 +1122,12 @@ class Control_Unit:
     def calculate_list(list: list[str]) -> int:
         """
         Calculates the value of a mathematic expression in list elements.\n
-        Expects the elements to start on a digit and alternate between a addition or subtration operator and a number.
+        Expects the elements to start on a digit and alternate between a addition or subtraction operator and a number.
         Raises ValueError if ths syntax is not followed
         
         :param list: List of string elements to calculate the value of 
         :type list: list[str]
-        :return: Result of the mathematial expression on this list
+        :return: Result of the mathematical expression on this list
         :rtype: int
         :raises ValueError: If no operation symbol is found on a given odd index of the list or if an even index of the list do not point to a digit
         """

@@ -32,7 +32,7 @@ class Segment_Mapper:
     __slots__ = (
         'stack_limit', 'memory_list', 'rodata_segment', 'data_segment', 
         'bss_segment', 'labels', 'constants', 'file_name', 
-        'memory', 'stack_pointer', 'valid_start', 'rip', 'registers'
+        'memory','valid_start', 'rip', 'registers'
     )
 
     # Directives for size identification and memory allocation verification
@@ -669,9 +669,9 @@ class Segment_Mapper:
         self.registers.write_reg("rsp", stack_start, False)
         # Step 1: push argument strings
         if argv is not None:
-            argv_addrs: list[int] = self.push_arguments(argv)
+            argv_addr: list[int] = self.push_arguments(argv)
             # Step 2: push argument pointers
-            for addr in argv_addrs:
+            for addr in argv_addr:
                 self.memory.push(addr.to_bytes(8, "little"))
             # Step 3: push argc
             memory.push((0).to_bytes(8, "little")) 
