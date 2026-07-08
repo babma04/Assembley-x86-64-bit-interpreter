@@ -153,8 +153,7 @@ class Segment_Mapper:
             self.memory_list.append(tokens)
         
         Storage.save_file(file_name, self.memory_list)
-        
-    
+
 
     def parse_section(self) -> None:
         """
@@ -187,7 +186,7 @@ class Segment_Mapper:
 
             elif (Segment_Mapper.is_constant(tokens)):
                 self.load_constant(tokens, index)
-                index += 1
+            index += 1
 
 
     # Schematics for each element of program sections:
