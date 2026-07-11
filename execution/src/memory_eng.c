@@ -31,7 +31,11 @@ void free_table(Table* table)
     // Free all allocated pages in the table
     for (int i = 0; i < MAX_PAGES; i++) {
         if (table->entries[i]) {
-            free_table((Table*)table->entries[i]); // Recursively free sub-tables
+            if (i == MAX_PAGES - 1) {
+                free(table->entries[i]); // Free the page itself
+            } else {
+                free_table((Table*)table->entries[i]); // Recursively free sub-tables
+            }
         }
     }
     // Free the table itself
@@ -127,9 +131,9 @@ int write_mem (Table* table, uint64_t v_addr, uint8_t *data, uint8_t size, uint8
         uint8_t *physical_addr = decompose_address(table, v_addr, create_page);
         if (!physical_addr) return 1;
         *physical_addr = *data;
+        return 0;
     }
-    else write_block(table, v_addr, data, size, create_page);
-    return 0;
+    return write_block(table, v_addr, data, size, create_page);
 }
 
 /**
@@ -204,7 +208,7 @@ int read_block (Table* table, uint64_t v_addr, uint8_t *buffer, uint8_t size)
         uint64_t offset = current_addr & 0xFFF; // Offset within the page
         size_t space_in_page = PAGE_SIZE - offset; // Space left in the current page
         size_t to_read = (size - read < space_in_page) ? (size - read) : space_in_page; // Amount to read in the current page
-        memcpy(buffer + read, physical_addr + offset, to_read);
+        memcpy(buffer + read, physical_addr, to_read);
         read += to_read;
     }
     return 0;
