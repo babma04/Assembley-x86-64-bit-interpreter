@@ -4,10 +4,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <string.h>
-#include <assert.h>
-
-// Building (src must be built)
-// gcc -O3 -shared -o libmmu.so -fPIC memory_eng.c
+#include <stdlib.h>
 
 // --- Test helpers ---
 
@@ -39,38 +36,34 @@ static int tests_passed = 0;
 // -----------------------------------------------------------------------
 
 // 1. table_init() returns a non-NULL pointer
-TEST(test_table_init_not_null)
-{
+TEST(test_table_init_not_null) {
     Table *t = table_init();
     ASSERT(t != NULL);
     free_table(t);
 }
 
 // 2. free_table() doesn't crash on a freshly-initialised table
-TEST(test_free_table_no_crash)
-{
+TEST(test_free_table_no_crash) {
     Table *t = table_init();
     ASSERT(t != NULL);
-    free_table(t);   // must not crash / segfault
+    free_table(t); 
 }
 
 // 3. write_mem() returns 0 (success) for a simple single-byte write
 //    with create_page = 1 so the page is allocated on demand
-TEST(test_write_mem_single_byte)
-{
+TEST(test_write_mem_single_byte) {
     Table *t = table_init();
     ASSERT(t != NULL);
 
     uint8_t data = 0xAB;
-    int ret = write_mem(t, 0x1000, &data, 1, /*create_page=*/1);
+    int ret = write_mem(t, 0x1000, &data, 1, 1);
     ASSERT(ret == 0);
 
     free_table(t);
 }
 
 // 4. read_mem() retrieves exactly the byte that was written
-TEST(test_read_mem_single_byte_roundtrip)
-{
+TEST(test_read_mem_single_byte_roundtrip) {
     Table *t = table_init();
     ASSERT(t != NULL);
 
@@ -86,8 +79,7 @@ TEST(test_read_mem_single_byte_roundtrip)
 }
 
 // 5. Multi-byte write / read roundtrip
-TEST(test_write_read_multi_byte)
-{
+TEST(test_write_read_multi_byte) {
     Table *t = table_init();
     ASSERT(t != NULL);
 
@@ -102,8 +94,7 @@ TEST(test_write_read_multi_byte)
 }
 
 // 6. Two independent writes to different addresses don't overlap
-TEST(test_two_writes_independent)
-{
+TEST(test_two_writes_independent) {
     Table *t = table_init();
     ASSERT(t != NULL);
 
@@ -121,8 +112,7 @@ TEST(test_two_writes_independent)
 }
 
 // 7. Overwriting the same address reflects the latest value
-TEST(test_overwrite_same_address)
-{
+TEST(test_overwrite_same_address) {
     Table *t = table_init();
     ASSERT(t != NULL);
 
@@ -130,7 +120,7 @@ TEST(test_overwrite_same_address)
     ASSERT(write_mem(t, 0x6000, &v1, 1, 1) == 0);
 
     uint8_t v2 = 0x22;
-    ASSERT(write_mem(t, 0x6000, &v2, 1, /*create_page=*/0) == 0);
+    ASSERT(write_mem(t, 0x6000, &v2, 1, 0) == 0);
 
     uint8_t result = 0;
     ASSERT(read_mem(t, 0x6000, &result, 1) == 0);
@@ -139,22 +129,20 @@ TEST(test_overwrite_same_address)
     free_table(t);
 }
 
-// 8. write_mem() with create_page = 0 on a non-existent page should fail (non-zero return)
-TEST(test_write_no_create_page_fails)
-{
+// 8. write_mem() with create_page = 0 on a non-existent page should fail
+TEST(test_write_no_create_page_fails) {
     Table *t = table_init();
     ASSERT(t != NULL);
 
     uint8_t data = 0xFF;
-    int ret = write_mem(t, 0xDEAD0000ULL, &data, 1, /*create_page=*/0);
-    ASSERT(ret != 0);   // page doesn't exist and we asked not to create it
+    int ret = write_mem(t, 0xDEAD0000ULL, &data, 1, 0);
+    ASSERT(ret != 0);   
 
     free_table(t);
 }
 
-// 9. read_mem() on an unmapped address should fail (non-zero return)
-TEST(test_read_unmapped_address_fails)
-{
+// 9. read_mem() on an unmapped address should fail
+TEST(test_read_unmapped_address_fails) {
     Table *t = table_init();
     ASSERT(t != NULL);
 
@@ -166,8 +154,7 @@ TEST(test_read_unmapped_address_fails)
 }
 
 // 10. Large address (high 64-bit value) roundtrip
-TEST(test_large_address_roundtrip)
-{
+TEST(test_large_address_roundtrip) {
     Table *t = table_init();
     ASSERT(t != NULL);
 
@@ -182,13 +169,33 @@ TEST(test_large_address_roundtrip)
     free_table(t);
 }
 
+// 11. Page Crossing (Writing and reading across a 4KB boundary)
+TEST(test_page_boundary_crossing) {
+    Table *t = table_init();
+    ASSERT(t != NULL);
+
+    // Address 0x0FFC is exactly 4 bytes before the end of the first 4KB page
+    // Writing 8 bytes here will place 4 bytes in page 0, and 4 bytes in page 1
+    uint64_t addr = 0x0FFC; 
+    uint8_t src[8] = {0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88};
+    
+    // Should successfully map both pages and split the write
+    ASSERT(write_mem(t, addr, src, 8, 1) == 0);
+
+    uint8_t dst[8] = {0};
+    // Should successfully traverse both pages to read the full block back
+    ASSERT(read_mem(t, addr, dst, 8) == 0);
+    ASSERT(memcmp(src, dst, 8) == 0);
+
+    free_table(t);
+}
+
 // -----------------------------------------------------------------------
 // Entry point
 // -----------------------------------------------------------------------
 
-int main(void)
-{
-    printf("=== memory_eng tests ===\n\n");
+int main(void) {
+    printf("=== MMU Memory Engine Tests ===\n\n");
 
     RUN(test_table_init_not_null);
     RUN(test_free_table_no_crash);
@@ -200,6 +207,7 @@ int main(void)
     RUN(test_write_no_create_page_fails);
     RUN(test_read_unmapped_address_fails);
     RUN(test_large_address_roundtrip);
+    RUN(test_page_boundary_crossing);
 
     printf("\n%d / %d tests passed.\n", tests_passed, tests_run);
     return (tests_passed == tests_run) ? 0 : 1;
