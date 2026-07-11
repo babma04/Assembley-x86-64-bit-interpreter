@@ -28,6 +28,7 @@ class Data_Memory:
     STACK_START = 0x7fffffffe000
     STACK_LIMIT: int = 0xe000000000  # Arbitrary lower limit for stack growth to prevent overflow
 
+    __slots__ = ['start', 'registers', 'lib', 'table']
 
     def __init__(self, registers: Registers_Interface, memory_base: int = RODATA_BASE) -> None:
         self.start: int = memory_base
