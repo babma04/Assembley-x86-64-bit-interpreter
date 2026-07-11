@@ -7,18 +7,6 @@
 
 // ----------------------------------------------------------------------------
 
-// Specific register types
-
-// high and low byte accessible regs
-typedef union x86_aliased_registers x86_aliased_registers;
-// same but with unsigned/signed flag
-typedef struct x86_general_register_complex x86_general_register_complex;
-
-//-----------------------------------------------------------------------------
-
-// Other gen purpose regs
-typedef struct x86_64bit_standard_registers x86_64bit_standard_registers;
-
 // General register type
 typedef struct CPURegs CPURegs;
 
