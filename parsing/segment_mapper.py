@@ -223,7 +223,7 @@ class Segment_Mapper:
         :rtype: Address
         """
         index += 1
-        while(self.memory_list[index][0] != "section" or index >= len(self.memory_list)):
+        while index < len(self.memory_list) and self.memory_list[index][0] != "section":
             tokens: list[str] = self.memory_list[index]
             if not self.data_format_validation(tokens, index, section):
                 sys.exit(-1)
@@ -379,7 +379,7 @@ class Segment_Mapper:
 
     def load_bss(self, current_rip: Address, index: int) -> Address:
         index += 1
-        while(self.memory_list[index][0] != "section" or index >= len(self.memory_list)):
+        while index < len(self.memory_list) and self.memory_list[index][0] != "section":
             tokens: list[str] = self.memory_list[index]
             if not self.bss_format_validation(tokens, index):
                 sys.exit(-2)
