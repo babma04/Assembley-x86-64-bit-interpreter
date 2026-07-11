@@ -17,24 +17,32 @@ class Registers_Interface:
         "rax", "rbx", "rcx", "rdx", "rsi", "rdi", "rbp", "rsp", "r8", "r9", "r10", "r11", "r12", "r13", "r14", "r15"
     ]
 
+    # Sub-registers that don't follow the regular suffix pattern and map straight
+    # to an r-prefixed 64-bit parent (16-bit form -> parent, 8-bit form -> parent)
+    EXTENDED_16BIT = {"si": "rsi", "di": "rdi", "bp": "rbp", "sp": "rsp"}
+    EXTENDED_8BIT = {"sil": "rsi", "dil": "rdi", "bpl": "rbp", "spl": "rsp"}
+
     # Class attributes for the library and the pointer to the registers structure in c
     __slots__ = ["lib", "regs"]
 
     def __init__(self) -> None:
-        # Load the library compiled s
+        # Load the library compiled
+        # lib/ lives at the project root, one directory up from this file (bridges/)
         _base_dir = os.path.dirname(os.path.abspath(__file__))
-        _lib_path = os.path.join(_base_dir, "/lib/libreg.so")
+        _project_root = os.path.dirname(_base_dir)
+        _lib_path = os.path.join(_project_root, "lib", "libreg.so")
         self.lib = ctypes.CDLL(_lib_path)
-
-        # Initializes a costume pointer to the registers structure
-        self.regs = self.lib.CPURegs_create()
 
         # -------------------------------
         # Define C return and args types
         # -------------------------------
+        # NOTE: restype/argtypes must be configured BEFORE any call is made,
+        # otherwise ctypes falls back to the default int return type, which
+        # truncates pointers on 64-bit systems.
 
         self.lib.CPURegs_create.restype = ctypes.c_void_p
         self.lib.CPURegs_free.argtypes = [ctypes.c_void_p]
+
         self.lib.write_reg.argtypes = [
             ctypes.c_void_p,      # Pointer to the struct in memory
             ctypes.c_int,                       # reg_id
@@ -48,21 +56,33 @@ class Registers_Interface:
         ]
         self.lib.read_8b_reg.restype = ctypes.c_uint64
         self.lib.read_4b_reg.argtypes = [
-            ctypes.c_void_p,      
+            ctypes.c_void_p,
             ctypes.c_uint8
         ]
         self.lib.read_4b_reg.restype = ctypes.c_uint32
         self.lib.read_2b_reg.argtypes = [
-            ctypes.c_void_p, 
-            ctypes.c_uint8                      
+            ctypes.c_void_p,
+            ctypes.c_uint8
         ]
-        self.lib.read_8b_reg.restype = ctypes.c_uint16
+        self.lib.read_2b_reg.restype = ctypes.c_uint16
         self.lib.read_1b_reg.argtypes = [
-            ctypes.c_void_p,      
-            ctypes.c_uint8,                     
+            ctypes.c_void_p,
+            ctypes.c_uint8,
             ctypes.c_uint8  # is_high
         ]
         self.lib.read_1b_reg.restype = ctypes.c_uint8
+
+        self.lib.set_reg_sign.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_int,                       # reg_id
+            ctypes.c_int                         # signed flag (0/1)
+        ]
+        self.lib.is_signed.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_int                          # reg_id
+        ]
+        self.lib.is_signed.restype = ctypes.c_int
+
         self.lib.read_rflags.argtypes = [ctypes.c_void_p]
         self.lib.read_rflags.restype = ctypes.c_uint32
         self.lib.read_trap_flag.argtypes = [ctypes.c_void_p]
@@ -70,11 +90,11 @@ class Registers_Interface:
         self.lib.read_carry_flag.argtypes = [ctypes.c_void_p]
         self.lib.read_carry_flag.restype = ctypes.c_int
         self.lib.read_zero_flag.argtypes = [ctypes.c_void_p]
-        self.lib.read_zero_flag.restype = ctypes.c_int        
+        self.lib.read_zero_flag.restype = ctypes.c_int
         self.lib.read_sign_flag.argtypes = [ctypes.c_void_p]
-        self.lib.read_sign_flag.restype = ctypes.c_int 
+        self.lib.read_sign_flag.restype = ctypes.c_int
         self.lib.read_overflow_flag.argtypes = [ctypes.c_void_p]
-        self.lib.read_overflow_flag.restype = ctypes.c_int 
+        self.lib.read_overflow_flag.restype = ctypes.c_int
         self.lib.write_rflags.argtypes = [
             ctypes.c_void_p,
             ctypes.c_uint32                 # value
@@ -84,6 +104,10 @@ class Registers_Interface:
             ctypes.c_uint8                 # flag_id
         ]
         self.lib.set_trap_flag.argtypes = [ctypes.c_void_p]
+
+        # Initializes a custom pointer to the registers structure.
+        # Done last, now that CPURegs_create.restype is correctly configured.
+        self.regs = self.lib.CPURegs_create()
 
     #------------------
     # Register Writing
@@ -103,23 +127,27 @@ class Registers_Interface:
         :type signed: bool
         :raises ValueError: If either the expression is not a register name or the value is too big for the register
         """
-        reg_info: tuple[str,int] = self.get_register_parent(expression)
-        reg_id: int = -1
+        reg_info: tuple[str, int] = self.get_register_parent(expression)
         reg_size: int = reg_info[1]
 
         bits: int = reg_size * 8
-        min_signed_val: int = -(2**(bits - 1))
-        max_unsigned_val: int = (2**(bits - 1))
+        if signed:
+            min_val: int = -(2**(bits - 1))
+            max_val: int = (2**(bits - 1)) - 1
+        else:
+            min_val = 0
+            max_val = (2**bits) - 1
 
-        if value < min_signed_val or value > max_unsigned_val:
+        if value < min_val or value > max_val:
             raise ValueError(f"INVALID VALUE {value} TO ATTRIBUTE TO {expression}. OVERFLOW DETECTED.")
+
         try:
-            reg_id = next((i for i, key in enumerate(self.REGISTERS_MAP) if key == reg_info[0]), -1)
-        except StopIteration:
+            reg_id: int = self.REGISTERS_MAP.index(reg_info[0])
+        except ValueError:
             raise ValueError(f"REGISTER {expression} DOES NOT EXIST.")
-        
-        self.lib.write_reg(reg_id, value, reg_size, self.is_high(expression))
-        self.lib.set_reg_sign(reg_id, 1 if signed else 0)
+
+        self.lib.write_reg(self.regs, reg_id, value, reg_size, self.is_high(expression))
+        self.lib.set_reg_sign(self.regs, reg_id, 1 if signed else 0)
 
     #------------------
     # Register Reading
@@ -129,47 +157,55 @@ class Registers_Interface:
         """
         Returns the value of the given register in the c structure file.
         Raises ValueError if the register given is not found.
-        
+
         :param expression: Name of the register to read
         :type expression: str
         :return: Value of the given register
         :rtype: int
         :raises ValueError: If a non existent expression is passed to the execution
         """
-        reg_info: tuple[str,int] = self.get_register_parent(expression)
-        reg_id: int = -1
+        reg_info: tuple[str, int] = self.get_register_parent(expression)
         reg_size: int = reg_info[1]
-        
-        try:
-            reg_id = next((i for i, key in enumerate(self.REGISTERS_MAP) if key == reg_info[0]), -1)
-        except StopIteration:
-            raise ValueError(f"REGISTER {expression} DOES NOT EXIST.")
-        # Because int is unbounded in python this is safe
-        value: int =  self.match_read(reg_id, reg_size, self.is_high(expression))
 
-        if self.lib.is_signed(reg_id) == 1:
-            bits: int = reg_size * 8            
+        try:
+            reg_id: int = self.REGISTERS_MAP.index(reg_info[0])
+        except ValueError:
+            raise ValueError(f"REGISTER {expression} DOES NOT EXIST.")
+
+        # Because int is unbounded in python this is safe
+        value: int = self.match_read(reg_id, reg_size, self.is_high(expression))
+
+        if self.lib.is_signed(self.regs, reg_id) == 1:
+            bits: int = reg_size * 8
             # Manual 2's complement conversion
             if value & (1 << (bits - 1)):
                 value -= (1 << bits)
         return value
-    
+
 
 # ---------
 # Helpers
 # ---------
 
-    def get_register_parent(self, expression: str) -> tuple[str,int]:
+    def get_register_parent(self, expression: str) -> tuple[str, int]:
         """
         Maps the sub-registers to its 64-bit parent and returns it with the mask require to obtain its value.
-        
+
         :param expression: sub 64-bit register (has a fallback option if a 64-bit register is passed)
         :type expression: str
         :return: Tuple containing the parent register and the size of the given register
         :rtype: tuple[str, int]
         """
         reg = expression.lower()
-        
+
+        # 8-bit registers with no regular suffix pattern (sil, dil, bpl, spl)
+        if reg in self.EXTENDED_8BIT:
+            return self.EXTENDED_8BIT[reg], self.SIZE_DIRECTIVES['byte']
+
+        # 16-bit registers with no regular suffix pattern (si, di, bp, sp)
+        if reg in self.EXTENDED_16BIT:
+            return self.EXTENDED_16BIT[reg], self.SIZE_DIRECTIVES['word']
+
         # 32-bit
         if reg.startswith('e') or reg.endswith('d'):
             parent = reg.replace('e', 'r', 1) if reg.startswith('e') else reg[:-1]
@@ -177,8 +213,8 @@ class Registers_Interface:
 
         # 16-bit
         if (len(reg) == 2 and reg.endswith('x')) or reg.endswith('w'):
-             parent = 'r' + reg if reg.endswith('x') else reg[:-1]
-             return parent, self.SIZE_DIRECTIVES['word']
+            parent = 'r' + reg if reg.endswith('x') else reg[:-1]
+            return parent, self.SIZE_DIRECTIVES['word']
 
         # 8-bit
         if reg.endswith('l') or reg.endswith('h') or reg.endswith('b'):
@@ -187,8 +223,8 @@ class Registers_Interface:
 
         # Fallback for 64-bit
         return reg, self.SIZE_DIRECTIVES['qword']
-    
-    def is_high(self, expression:str ) -> int:
+
+    def is_high(self, expression: str) -> int:
         """
         Verifies if the expression refers to the second eight bytes of a register based on its expression.
 
@@ -200,7 +236,7 @@ class Registers_Interface:
         if len(expression) == 2 and expression[1] == 'h':
             return 1
         return 0
-    
+
     def match_read(self, reg_id: int, size: int, is_high: int) -> int:
         """
         Directs execution to the correct read function in c according to the specified size.
@@ -214,10 +250,10 @@ class Registers_Interface:
         :return: value of that register
         :rtype: int
         """
-        if size == 8: return self.lib.read_8b_reg(reg_id)
-        elif size == 4: return self.lib.read_4b_reg(reg_id)
-        elif size == 2: return self.lib.read_2b_reg(reg_id)
-        else: return self.lib.read_1b_reg(reg_id, is_high)
+        if size == 8: return self.lib.read_8b_reg(self.regs, reg_id)
+        elif size == 4: return self.lib.read_4b_reg(self.regs, reg_id)
+        elif size == 2: return self.lib.read_2b_reg(self.regs, reg_id)
+        else: return self.lib.read_1b_reg(self.regs, reg_id, is_high)
 
 #----------------------------------
 # Flag Reading and Writing Methods
@@ -229,16 +265,16 @@ class Registers_Interface:
         """
         Reads the value of the flags register in the c structure file.
         """
-        return bytes(self.lib.read_rflags(self.regs))
-    
+        return self.lib.read_rflags(self.regs).to_bytes(4, "little")
+
     def read_trap_flag(self) -> bool:
         """
         Reads the value of the trap flag in the c structure file.
         :return: Value of the trap flag
         :rtype: int
         """
-        return True if int(self.lib.read_trap_flag()) == 1 else False
-    
+        return True if int(self.lib.read_trap_flag(self.regs)) == 1 else False
+
     def Exch_trap_flag(self) -> None:
         """
         Exchanges the value of the trap flag in the c structure file.
@@ -250,25 +286,25 @@ class Registers_Interface:
         Reads the value of the carry flag in the c structure file and returns its value as a bool
         """
         return True if int(self.lib.read_carry_flag(self.regs)) == 1 else False
-    
+
     def read_overflow(self) -> bool:
         """
         Reads the value of the overflow flag in the c structure file and returns its value as a bool
         """
         return True if int(self.lib.read_overflow_flag(self.regs)) == 1 else False
-    
+
     def read_zero(self) -> bool:
         """
         Reads the value of the zero flag in the c structure file and returns its value as a bool
         """
         return True if int(self.lib.read_zero_flag(self.regs)) == 1 else False
-    
+
     def read_sign(self) -> bool:
         """
         Reads the value of the sign flag in the c structure file and returns its value as a bool
         """
         return True if int(self.lib.read_sign_flag(self.regs)) == 1 else False
-    
+
     def exch_flag(self, flag_id: int) -> None:
         """
         Exchanges the value of a given flag according to its id on the flag register
@@ -277,12 +313,12 @@ class Registers_Interface:
         :type: int
         :raises ValueError: if the flag_id given is invalid
         """
-        if (flag_id < 0 or flag_id > 31) : 
+        if (flag_id < 0 or flag_id > 31):
             raise ValueError
         f_id: ctypes.c_uint8 = ctypes.c_uint8(flag_id)
-        self.lib.exch_rflags(self.regs, f_id)
+        self.lib.exch_rflag(self.regs, f_id)
 
     def write_flags(self, value: int) -> None:
-        
+
         v: ctypes.c_uint32 = ctypes.c_uint32(value)
         self.lib.write_rflags(self.regs, v)
