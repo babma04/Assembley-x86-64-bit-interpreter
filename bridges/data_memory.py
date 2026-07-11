@@ -23,44 +23,57 @@ class Data_Memory:
     :rtype: Data_Memory
     :raises MemoryError: If the memory table fails to initialize
     """
-    # Memory constraints 
+    # Memory constraints
     RODATA_BASE: int = 0x500000
     STACK_START = 0x7fffffffe000
     STACK_LIMIT: int = 0xe000000000  # Arbitrary lower limit for stack growth to prevent overflow
 
 
     def __init__(self, registers: Registers_Interface, memory_base: int = RODATA_BASE) -> None:
-        self.start: int= memory_base 
+        self.start: int = memory_base
         self.registers = registers
-        
+
         # C libs initializers
         # Loads C memory management lib as an instance of the class
+        # lib/ lives at the project root, one directory up from this file (bridges/)
         _base_dir = os.path.dirname(os.path.abspath(__file__))
-        _lib_path = os.path.join(_base_dir, "/lib/libmmu.so")
+        _project_root = os.path.dirname(_base_dir)
+        _lib_path = os.path.join(_project_root, "lib", "libmmu.so")
         self.lib = ctypes.CDLL(_lib_path)
 
         # Setup C types as usable types in python
         self.lib.table_init.restype = ctypes.c_void_p
         self.lib.free_table.argtypes = [ctypes.c_void_p]
-        self.lib.write_mem.argtypes = [ctypes.c_void_p, ctypes.c_uint64, ctypes.c_uint8, ctypes.c_uint8, ctypes.c_uint8]
+        self.lib.write_mem.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint64,
+            ctypes.POINTER(ctypes.c_uint8),   # data buffer (was mistakenly c_uint8)
+            ctypes.c_size_t,                  # size (was mistakenly c_uint8)
+            ctypes.c_uint8
+        ]
         self.lib.write_mem.restype = ctypes.c_int
-        self.lib.read_mem.argtypes = [ctypes.c_void_p, ctypes.c_uint64, ctypes.POINTER(ctypes.c_uint8), ctypes.c_uint8]
+        self.lib.read_mem.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint64,
+            ctypes.POINTER(ctypes.c_uint8),
+            ctypes.c_size_t                   # size (was mistakenly c_uint8)
+        ]
         self.lib.read_mem.restype = ctypes.c_int
-        
+
         self.table = self.lib.table_init()
-        # Double check for table init 
+        # Double check for table init
         if (not self.table):
             raise MemoryError("Failed to initialize memory table.")
 
     # ------------------------
-    # Read and write methods 
+    # Read and write methods
     # ------------------------
     def read_bytes(self, addr: int, size: int) -> bytes:
         """
         Reads a byte representation of the data at a specific address/addresses with a specific size.\n
         Uses the read_mem function from the c script to read the value from memory.\n
         Returns the read data as a bytes object. If the read operation fails (e.g., due to a segmentation fault), raises a MemoryError.
-        
+
         :param addr: address to start reading from.
         :type addr: int
         :param size: size of the data to read: [1,2,4,8] bytes
@@ -77,7 +90,7 @@ class Data_Memory:
         if self.lib.read_mem(self.table, c_addr, buffer, c_size) == 1:  # Read memory into the buffer
             raise MemoryError(f"Segmentation Fault at 0x{hex(addr)}")
         return bytes(buffer)  # Convert the buffer to bytes and return
-    
+
 
     def write_bytes(self, addr: int, data: bytes, size: int, create_page: bool = True) -> None:
         """
@@ -86,7 +99,7 @@ class Data_Memory:
         If the write operation fails (e.g., due to a segmentation fault), raises a MemoryError.
         Uses a helper function to ensure that the data being written has the correct number of bytes for the specified size, padding with zeros if necessary.
         Has a flag to indicate if pages should be created if they don't exist, which affects the behavior of the write operation in case of unmapped addresses.
-        
+
         :param addr: address to start writing to.
         :type addr: int
         :param size: size of the data to write: [1,2,4,8] bytes
@@ -97,7 +110,7 @@ class Data_Memory:
         :type create_page: bool
         :raises MemoryError: If the write operation encounters an unmapped address (Segmentation Fault
         """
-        # Verify data correctness 
+        # Verify data correctness
         if not self.valid_data_length(data, size):
             data = self.get_valid_data(data, size)
 
@@ -105,10 +118,10 @@ class Data_Memory:
         c_data = (ctypes.c_uint8 * size).from_buffer_copy(data)  # Convert data to a C array
         c_addr: ctypes.c_uint64 = ctypes.c_uint64(addr)  # Convert address to C type
         c_size: ctypes.c_size_t = ctypes.c_size_t(size)  # Convert size to C type
-        
+
         if self.lib.write_mem(self.table, c_addr, c_data, c_size, 1 if create_page else 0) == 1:  # Write memory from the C array
             raise MemoryError(f"Segmentation Fault at 0x{hex(addr)}")
-    
+
     # --------------------------------------
     # Data validation and formatting helpers
     # --------------------------------------
@@ -125,8 +138,8 @@ class Data_Memory:
         :return: True if the number of bytes of the data variable matches the size given
         :rtype: bool
         """
-        return len(data) == size 
-    
+        return len(data) == size
+
     def get_valid_data(self, data: bytes, size: int) -> bytes:
         """
         Returns a copy of data with the correct amount of explicit bytes.\n
@@ -136,7 +149,7 @@ class Data_Memory:
         :type data: bytes
         :param size: Number of bytes to write
         :type size: int
-        :return: Full data with all implicit bytes written out 
+        :return: Full data with all implicit bytes written out
         :rtype: bytes
         """
         return data[:size].ljust(size, b'\x00')
@@ -151,30 +164,33 @@ class Data_Memory:
         If the value provided is less than 8 bytes, it will be padded with zeros to fit the stack cell size. If it exceeds 8 bytes, an error will be raised.
         Uses the write_bytes method to write the value to the stack, ensuring that the stack pointer is updated correctly and that stack overflow is prevented by checking against a predefined stack limit.
         The create_page flag is set to True for stack operations to allow the stack to grow as needed, but stack overflow is prevented by the stack limit check.
-        
+
         :param value: value to add to the stack
         :type value: bytes
         :raises MemoryError: If the stack overflows (i.e., if the stack pointer goes below an arbitrary lower limit)
         :raises ValueError: If the value exceeds the stack cell size of 8 bytes
         """
+        # If the value is longer than 8 bytes, signals an error
+        if len(value) > 8:
+            raise ValueError("Value exceeds stack cell size of 8 bytes.")
+
         rsp = self.registers.read_reg('rsp')
         # Check for stack overflow before pushing
         if rsp - 8 < self.STACK_LIMIT:
             raise MemoryError("Stack overflow: cannot push more data to the stack.")
-        # Ensure the value is exactly 8 bytes, padding with zeros if necessary, or truncating if it's too long
-        elif len(value) < 8:
+
+        # Ensure the value is exactly 8 bytes, padding with zeros if necessary
+        if len(value) < 8:
             value = self.get_valid_data(value, 8)
-        # If the value is longer than 8 bytes, signals an error
-        elif len(value) > 8:
-            raise ValueError("Value exceeds stack cell size of 8 bytes.")
+
         # stack grows downward
         self.registers.write_reg('rsp', rsp - 0x8)
         self.write_bytes(rsp - 0x8, value, 8)
 
-    def pop(self) ->  bytes:
+    def pop(self) -> bytes:
         """
         Pop a full 8-byte (64-bit) value.
-        
+
         :return: current value at the top of the stack
         :type: bytes
         :raises MemoryError: If the stack underflow's (i.e., if the stack pointer goes above the stack start address)
