@@ -75,9 +75,11 @@ Wraps a `CPURegs` C struct representing the general-purpose registers (`rax`–`
 and the flags register.
 
 ### Construction
+
 ```python
 regs = Registers_Interface()
 ```
+
 Loads `libreg.so`, configures `argtypes`/`restype` for every bound C function, and
 then allocates the C-side register struct via `CPURegs_create`.
 
@@ -93,11 +95,13 @@ Accepts standard x86-64 register names and resolves sub-registers to their paren
 | 8-bit  | `al`, `ah`, `r8b`, `sil`, `dil`, `bpl`, `spl` | byte |
 
 ### Reading and writing
+
 ```python
 regs.write_reg("eax", 42)
 regs.write_reg("al", -5, signed=True)
 value = regs.read_reg("al")
 ```
+
 - `write_reg(expression, value, signed=False)` — validates the value fits the target
   register's size (respecting `signed`), resolves the parent register, and writes
   through to C. Raises `ValueError` on an unknown register name or an out-of-range
@@ -106,6 +110,7 @@ value = regs.read_reg("al")
   applies two's-complement conversion if the register is marked signed.
 
 ### Flags
+
 ```python
 regs.read_carry()      # bool
 regs.read_zero()       # bool
@@ -124,18 +129,22 @@ Wraps a C-side page table for emulated process memory, including a downward-grow
 stack.
 
 ### Construction
+
 ```python
 mem = Data_Memory(registers=regs)
 ```
+
 Requires a `Registers_Interface` instance (used internally for `rsp` during stack
 ops). Loads `libmmu.so` and initializes the page table via `table_init`. Raises
 `MemoryError` if the table fails to allocate.
 
 ### Byte-level access
+
 ```python
 mem.write_bytes(addr, data, size)
 value = mem.read_bytes(addr, size)
 ```
+
 - `size` must be one of `1, 2, 4, 8`.
 - `write_bytes` pads/truncates `data` to `size` bytes if it doesn't already match.
 - Both raise `MemoryError` on a segmentation fault (unmapped address, depending on
@@ -145,18 +154,30 @@ value = mem.read_bytes(addr, size)
 
 Every stack entry is a fixed 8 bytes; the stack grows downward from
 `STACK_START` (`0x7fffffffe000`) toward `STACK_LIMIT` (`0xe000000000`).
+
 ```python
 mem.push(value)    # value: bytes, up to 8 bytes (zero-padded if shorter)
 value = mem.pop()  # returns 8 bytes, clears the popped slot
 ```
+
 - `push` raises `ValueError` if `value` is longer than 8 bytes, and `MemoryError` on
   stack overflow (past `STACK_LIMIT`).
 - `pop` raises `MemoryError` on stack underflow (`rsp` at or past `STACK_START`).
 
 ## Notes for the C side
 
-The bindings assume the following C signatures — keep `execution/include/registers.h`
-and `execution/include/memory_eng.h` in sync with these if either side changes:
+**Memory (`execution/include/memory_eng.h`) — confirmed against the actual header:**
+
+- `Table* table_init(void)`
+- `void free_table(Table* table)`
+- `int write_mem(Table* table, uint64_t v_addr, uint8_t *data, uint8_t size, uint8_t create_page)`
+- `int read_mem(Table* table, uint64_t v_addr, uint8_t *result, uint8_t size)`
+
+Note that `size` is `uint8_t` here, not `size_t` — the bindings in `data_memory.py` pass
+`ctypes.c_uint8(size)`, not `ctypes.c_size_t(size)`, to match.
+
+**Registers (`execution/include/registers.h`) — assumed, not yet confirmed against the header.**
+The bindings in `register_manager.py` currently assume:
 
 - `void* CPURegs_create(void)`
 - `void CPURegs_free(void* regs)`
@@ -173,7 +194,12 @@ and `execution/include/memory_eng.h` in sync with these if either side changes:
   `read_sign_flag` / `read_overflow_flag`
 - `void exch_rflag(void* regs, uint8_t flag_id)`
 - `void set_trap_flag(void* regs)`
-- `void* table_init(void)`
-- `void free_table(void* table)`
-- `int write_mem(void* table, uint64_t addr, uint8_t* data, size_t size, uint8_t create_page)`
-- `int read_mem(void* table, uint64_t addr, uint8_t* buffer, size_t size)`
+
+Once `registers.h` is shared, these should be cross-checked the same way `memory_eng.h`
+was — the `write_mem`/`read_mem` size-type mismatch above is a good example of why:
+an assumption that looked reasonable (`size_t` for a byte count) was wrong once the
+actual header was checked.
+
+## Author
+
+João Carilho Louro

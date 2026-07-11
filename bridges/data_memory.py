@@ -42,21 +42,24 @@ class Data_Memory:
         self.lib = ctypes.CDLL(_lib_path)
 
         # Setup C types as usable types in python
+        # Matches execution/include/memory_eng.h:
+        #   int write_mem(Table*, uint64_t v_addr, uint8_t *data, uint8_t size, uint8_t create_page)
+        #   int read_mem(Table*, uint64_t v_addr, uint8_t *result, uint8_t size)
         self.lib.table_init.restype = ctypes.c_void_p
         self.lib.free_table.argtypes = [ctypes.c_void_p]
         self.lib.write_mem.argtypes = [
             ctypes.c_void_p,
             ctypes.c_uint64,
-            ctypes.POINTER(ctypes.c_uint8),   # data buffer (was mistakenly c_uint8)
-            ctypes.c_size_t,                  # size (was mistakenly c_uint8)
-            ctypes.c_uint8
+            ctypes.POINTER(ctypes.c_uint8),   # data buffer (was mistakenly a bare c_uint8)
+            ctypes.c_uint8,                    # size
+            ctypes.c_uint8                     # create_page
         ]
         self.lib.write_mem.restype = ctypes.c_int
         self.lib.read_mem.argtypes = [
             ctypes.c_void_p,
             ctypes.c_uint64,
-            ctypes.POINTER(ctypes.c_uint8),
-            ctypes.c_size_t                   # size (was mistakenly c_uint8)
+            ctypes.POINTER(ctypes.c_uint8),   # result buffer
+            ctypes.c_uint8                     # size
         ]
         self.lib.read_mem.restype = ctypes.c_int
 
@@ -85,7 +88,7 @@ class Data_Memory:
         # Python types to C types conversions and buffer allocation
         buffer = (ctypes.c_uint8 * size)()  # Create a buffer to hold the read bytes
         c_addr: ctypes.c_uint64 = ctypes.c_uint64(addr)  # Convert address to C type
-        c_size: ctypes.c_size_t = ctypes.c_size_t(size)  # Convert size to C type
+        c_size: ctypes.c_uint8 = ctypes.c_uint8(size)  # Convert size to C type (uint8_t per memory_eng.h)
 
         if self.lib.read_mem(self.table, c_addr, buffer, c_size) == 1:  # Read memory into the buffer
             raise MemoryError(f"Segmentation Fault at 0x{hex(addr)}")
@@ -117,7 +120,7 @@ class Data_Memory:
         # Python types to C types conversions and buffer allocation
         c_data = (ctypes.c_uint8 * size).from_buffer_copy(data)  # Convert data to a C array
         c_addr: ctypes.c_uint64 = ctypes.c_uint64(addr)  # Convert address to C type
-        c_size: ctypes.c_size_t = ctypes.c_size_t(size)  # Convert size to C type
+        c_size: ctypes.c_uint8 = ctypes.c_uint8(size)  # Convert size to C type (uint8_t per memory_eng.h)
 
         if self.lib.write_mem(self.table, c_addr, c_data, c_size, 1 if create_page else 0) == 1:  # Write memory from the C array
             raise MemoryError(f"Segmentation Fault at 0x{hex(addr)}")
