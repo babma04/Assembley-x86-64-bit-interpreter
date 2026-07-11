@@ -1,6 +1,18 @@
 #include "../include/operations.h"
 
 // --------------------------------------------------------------------------------
+// Prototypes
+// --------------------------------------------------------------------------------
+void exec_cmp(Info *s); void exec_add(Info *s); void exec_adc(Info *s);
+void exec_sub(Info *s); void exec_sbb(Info *s); void exec_inc(Info *s);
+void exec_dec(Info *s); void exec_and(Info *s); void exec_or(Info *s);
+void exec_xor(Info *s); void exec_not(Info *s); void exec_neg(Info *s);
+void exec_xchg(Info *s);
+void set_result_info(Info *current_state);
+void set_result(Info *current_instruction_state);
+
+
+// --------------------------------------------------------------------------------
 // Structures implementations
 // --------------------------------------------------------------------------------
 
