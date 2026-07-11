@@ -1,4 +1,5 @@
 #include "../include/memory_eng.h"
+#include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -12,12 +13,16 @@ struct Table {
     void *entries[MAX_PAGES];
 };
 
+// --- Prototypes ---
+static int write_block (Table* table, uint64_t v_addr, uint8_t *data, uint8_t size, uint8_t create_page);
+static int read_block (Table* table, uint64_t v_addr, uint8_t *buffer, uint8_t size);
+
 
 Table* table_init()
 {
     Table* table = (Table*)calloc(1, sizeof(Table));
     if (!table) {
-        printf ("Failed memory allocation for table initializer!\n Major error detected, exiting...\n");
+        fprintf (stderr, "Failed memory allocation for table initializer!\n Major error detected, exiting...\n");
         return NULL;
     }
     return table;
@@ -43,7 +48,7 @@ void free_table(Table* table)
 }
 
 /**
- * @brief Main MMU funion. 
+ * @brief Main MMU function. 
  * * Should initialize the Table structure if it's not yet created.
  * * Used to handle reads and writes as well as manage page creation if needed.
  * 
@@ -55,70 +60,42 @@ void free_table(Table* table)
  */
 uint8_t *decompose_address (Table *CR3, uint64_t v_addr, uint8_t create_page)
 {
-    // If the page_dir_root is not yet initialized initialize it
-    if (!CR3)
-    {
-        // If create_pages is 0 then i can't read any page in this stage and should return NULL
+    // The root table must be initialized by the caller via table_init()
+    if (!CR3) return NULL;
+
+    uint64_t pml4_idx  = (v_addr >> 39) & 0x1FF;
+    uint64_t pdpt_idx  = (v_addr >> 30) & 0x1FF;
+    uint64_t pd_idx    = (v_addr >> 21) & 0x1FF;
+    uint64_t pt_idx    = (v_addr >> 12) & 0x1FF;
+    uint64_t offset    = v_addr & 0xFFF;
+
+    // 1. Level 4 (PML4) -> Level 3 (PDPT)
+    if (!CR3->entries[pml4_idx]) {
         if (!create_page) return NULL;
-        // Else allocates a block of memory for a Table structure and starts it out at 0
-        CR3 = (Table*)calloc(1, sizeof(Table));
+        CR3->entries[pml4_idx] = calloc(1, sizeof(Table));
     }
+    Table *pdpt = (Table*)CR3->entries[pml4_idx];
 
-    // Table index and offset extraction:
-    // Extracts the first 9 bits of the address
-    uint64_t pml4 = (v_addr >> 39) & 0x1FF;
-    // Extracts the 9 following bits
-    uint64_t dir_ptr = (v_addr >> 30) & 0x1FF;
-    // Extracts the 9 bits of the Directory of the Table
-    uint64_t dir = (v_addr >> 21) & 0x1FF;
-    // Ignores the last 12 bits of the address and extracts the 9 bits of the Table index
-    uint64_t table = (v_addr >> 12) & 0x1FF;
-    // Extracts the last 12 bits of the address
-    uint64_t offset = v_addr & 0xFFF;
-
-    // If the first directory level (PML64) is not initialized initializes it
-    if (!CR3->entries[pml4])
-    {
-        // If create_pages is 0 then i can't read any page in this stage and should return NULL
-        if(!create_page) return NULL;
-        // Else allocates a block of memory for a Table structure and starts it out at 0
-        CR3->entries[pml4] = calloc(1, sizeof(Table));
+    // 2. Level 3 (PDPT) -> Level 2 (PD)
+    if (!pdpt->entries[pdpt_idx]) {
+        if (!create_page) return NULL;
+        pdpt->entries[pdpt_idx] = calloc(1, sizeof(Table));
     }
-    // Else takes its pointer
-    Table *dir_ptr_pointer = (Table*)CR3->entries[pml4];
+    Table *pd = (Table*)pdpt->entries[pdpt_idx];
 
-    // If the seconds directory level (Dir_Ptr) is not yet initialized initializes it
-    if(!dir_ptr_pointer->entries[dir_ptr])
-    {
-        // If create_pages is 0 then i can't read any page in this stage and should return NULL
-        if(!create_page) return NULL;
-        // Else allocates a block of memory for a Table structure and starts it out at 0
-        dir_ptr_pointer->entries[dir_ptr] = calloc(1, sizeof(Table));
+    // 3. Level 2 (PD) -> Level 1 (PT)
+    if (!pd->entries[pd_idx]) {
+        if (!create_page) return NULL;
+        pd->entries[pd_idx] = calloc(1, sizeof(Table));
     }
-    // Else takes its pointer
-    Table *dir_pointer = (Table*)dir_ptr_pointer->entries[dir_ptr];
+    Table *pt = (Table*)pd->entries[pd_idx];
 
-    // If the third directory level (Dir) is not yet initialized initializes it
-    if(!dir_pointer->entries[dir])
-    {
-        // If create_pages is 0 then i can't read any page in this stage and should return NULL
-        if(!create_page) return NULL;
-        // Else allocates a block of memory for a Table structure and starts it out at 0
-        dir_pointer->entries[dir] = calloc(1, sizeof(Table));
+    // 4. Level 1 (PT) -> Actual 4KB Page
+    if (!pt->entries[pt_idx]) {
+        if (!create_page) return NULL;
+        pt->entries[pt_idx] = calloc(1, PAGE_SIZE);
     }
-    // Else takes its pointer
-    Table *table_pointer = (Table*)dir_pointer->entries[dir];
-
-    // If the Table is not yet initialized initializes it
-    if(!table_pointer->entries[table])
-    {
-        // If create_pages is 0 then i can't read any page in this stage and should return NULL
-        if(!create_page) return NULL;
-        // Else allocates a block of memory for a Table structure and starts it out at 0
-        table_pointer->entries[table] = calloc(1, PAGE_SIZE);
-    }
-    // Else takes its pointer
-    uint8_t *page_addr = (uint8_t*)table_pointer->entries[table];
+    uint8_t *page_addr = (uint8_t*)pt->entries[pt_idx];
 
     return page_addr + offset;
 }
@@ -151,7 +128,7 @@ int write_mem (Table* table, uint64_t v_addr, uint8_t *data, uint8_t size, uint8
  * If set to 0, the function will not create new pages and will return without writing if the target page does not exist. 
  * If set to 1, the function will create new pages as needed to accommodate the write operation.
  */
-int write_block (Table* table, uint64_t v_addr, uint8_t *data, uint8_t size, uint8_t create_page)
+static int write_block (Table* table, uint64_t v_addr, uint8_t *data, uint8_t size, uint8_t create_page)
 {
     size_t written = 0;
     while (written < size)
@@ -194,7 +171,7 @@ int read_mem (Table* table, uint64_t v_addr, uint8_t *buffer, uint8_t size)
  * @param size Size of the data block to be read in bytes
  * @return 0 on success, 1 if any part of the read operation encounters an unmapped address (Segmentation Fault)
  */
-int read_block (Table* table, uint64_t v_addr, uint8_t *buffer, uint8_t size)
+static int read_block (Table* table, uint64_t v_addr, uint8_t *buffer, uint8_t size)
 {
     size_t read = 0;
     while (read < size)
