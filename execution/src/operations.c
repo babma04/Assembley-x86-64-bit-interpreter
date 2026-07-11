@@ -1,30 +1,18 @@
 #include "../include/operations.h"
 
-// --------------------------------------------------------------------------------
-// Prototypes
-// --------------------------------------------------------------------------------
-void exec_cmp(Info *s); void exec_add(Info *s); void exec_adc(Info *s);
-void exec_sub(Info *s); void exec_sbb(Info *s); void exec_inc(Info *s);
-void exec_dec(Info *s); void exec_and(Info *s); void exec_or(Info *s);
-void exec_xor(Info *s); void exec_not(Info *s); void exec_neg(Info *s);
-void exec_xchg(Info *s);
-void set_result_info(Info *current_state);
-void set_result(Info *current_instruction_state);
-static void commit_operand (Info* current_instruction_state, Operand* op, long long value);
-
 
 // --------------------------------------------------------------------------------
 // Structures implementations
 // --------------------------------------------------------------------------------
 
 // Structure for each alu operand's necessary info
-struct Operand{
+typedef struct Operand{
     long long address;
     long long value;
     uint8_t size; // 1,2,4,8
     char *op_type;
     uint8_t visual_rep; // 1 for text, 0 for numerical
-};
+} Operand;
 
 // To be implemented a fpu operand struct
 
@@ -38,15 +26,36 @@ struct Info {
     Operand result;
 };
 
-// Instructions link struct
-struct InstructionMap {
-    char *instruction;
-    InstructionFunc func;
-};
+// --------------------------------------------------------------------------------
+// Prototypes
+// --------------------------------------------------------------------------------
+static void exec_cmp(Info *s); 
+static void exec_add(Info *s); 
+static void exec_adc(Info *s);
+static void exec_sub(Info *s); 
+static void exec_sbb(Info *s); 
+static void exec_inc(Info *s);
+static void exec_dec(Info *s); 
+static void exec_and(Info *s); static void exec_or(Info *s);
+static void exec_xor(Info *s); 
+static void exec_not(Info *s); 
+static void exec_neg(Info *s);
+static void exec_xchg(Info *s);
+static void set_result_info(Info *current_state);
+static void commit_operand (Info* current_instruction_state, Operand* op, long long value);
 
 // --------------------------------------------------------------------------------
 // Lookup Table
 // --------------------------------------------------------------------------------
+
+// Standard instruction function signature alias
+typedef void (*InstructionFunc)(Info *);
+
+// Instructions link struct
+typedef struct InstructionMap {
+    char *instruction;
+    InstructionFunc func;
+} InstructionMap;
 
 // Lookup table to match string instructions with c functions
 InstructionMap dispatch_table[] = {
@@ -129,6 +138,28 @@ void set_table_ref (Info *current_state, Table *t)
     current_state->table = t;
 }
 
+/**
+ * @brief Commits the result of an operation to the appropriate destination (memory or register) based on the operand type.
+ * * This function is called after an operation has been executed and the result is ready to be stored.
+ * @param current_instruction_state Pointer to the Info structure holding all operand, instruction, registers and results info
+ * @param op Pointer to the Operand structure that holds the destination information (address, type, size, etc.)
+ * @param value The result value to be committed to the destination
+ * @warning This function assumes that the operand type is either "memory" or "register". If the operand type is unknown, an error message will be printed.
+ */
+static void commit_operand (Info* current_instruction_state, Operand* op, long long value)
+{
+    if (strcmp(op->op_type, "memory") == 0) {
+        write_mem(current_instruction_state->table, op->address, (uint8_t*)&value, op->size, 1);
+    } else if (strcmp(op->op_type, "register") == 0) {
+        uint8_t is_high = (op->address <= 3 && op->size == 1);
+        write_reg(current_instruction_state->registers, op->address, value, op->size, is_high);
+    }
+    else
+    {
+        printf("Error: Unknown operand type %s\n", op->op_type);
+    }
+}
+
 // -------------------
 // Cleaners
 // -------------------
@@ -153,32 +184,19 @@ void dispatch(Info *current_instruction_state)
     
     for (int i = 0; i < TABLE_SIZE; i++) {
         if (strcmp(current_instruction_state->instruction, dispatch_table[i].instruction) == 0) {
+            int is_xchg = (strcmp(current_instruction_state->instruction, "xchg") == 0);
             dispatch_table[i].func(current_instruction_state);
-            if (strcmp(current_instruction_state->instruction, "xchg") != 0) {
-                set_result(current_instruction_state);
+            if (!is_xchg) {
+                commit_operand(current_instruction_state, &current_instruction_state->result, current_instruction_state->result.value);
             }
+            clean(current_instruction_state);
             return;
         }
     }
     // Should never be reached as in this point the instruction has already been validated
     printf("Error: Unknown instruction %s\n", current_instruction_state->instruction);
-    // Safety for if an operation is ends in an error
+    // Safety for if an operation ends in an error
     clean(current_instruction_state);
-}
-
-// --------------
-// Result getter
-// --------------
-
-/**
- * @brief Reads the result of the current instruction execution and returns it if it's a register, otherwise returns -1.
- * 
- * @param current_instruction_state Pointer to the Info structure holding all operand, instruction and results info
- * @return int Result of the instruction execution if it's a register, otherwise -1
- */
-long long read_result(Info *current_instruction_state)
-{
-    return current_instruction_state->result.value;
 }
 
 // --------------
@@ -191,7 +209,7 @@ long long read_result(Info *current_instruction_state)
  * 
  * @param current_state Pointer to the Info structure holding all operand, instruction result and registers info
  */
-void set_result_info (Info *current_state)
+static void set_result_info (Info *current_state)
 {
     current_state->result.op_type = current_state->op1.op_type;
     current_state->result.size = current_state->op1.size;
@@ -199,18 +217,6 @@ void set_result_info (Info *current_state)
     current_state->result.visual_rep = (current_state->op1.visual_rep || current_state->op2.visual_rep);
 }
 
-/**
- * @brief Writes the result of the current instruction execution if it's a memory address or register and cleans the current instruction state structure.
- * 
- * @param current_instruction_state Pointer to the Info structure holding all operand, instruction and results info
- * @warning If the result is not a memory address or register does nothing
- * @warning After writing the result on memory cleans the current instruction state structure
- */
-void set_result(Info *current_instruction_state)
-{
-    commit_operand(current_instruction_state, &current_instruction_state->result, current_instruction_state->result.value);
-    clean(current_instruction_state);
-}
 
 //----------------------
 // Data Path Functions
@@ -222,7 +228,7 @@ void set_result(Info *current_instruction_state)
  * @param s Pointer to the Info structure holding all operand, instruction and results info
  * @param result The result of the operation of the two operands, used to set the flags
  */
-void flags_update(Info *s, unsigned long long result)
+static void flags_update(Info *s, unsigned long long result)
 {
     int bit_count = 8 * s->op1.size;
     int msb_mask = bit_count - 1;
@@ -256,7 +262,7 @@ void flags_update(Info *s, unsigned long long result)
  * @param s Pointer to the Info structure holding all operand, instruction and results info
  * @warning The result of the subtraction is not stored, only the flags are updated based on the result of the operation
  */
-void exec_cmp(Info *s)
+static void exec_cmp(Info *s)
 {
     // Need cmp syntax rules check
     unsigned long long result = (unsigned long long) s->op1.value - s->op2.value;
@@ -274,7 +280,7 @@ void exec_cmp(Info *s)
  * @param s Pointer to the Info structure holding all operand, instruction and results info
  * @warning The result of the addition is stored in the result field of the Info structure and the flags are updated based on the result of the operation
  */
-void exec_add(Info *s)
+static void exec_add(Info *s)
 {
     unsigned long long result = (unsigned long long) s->op1.value + s->op2.value;
     flags_update(s, result);
@@ -287,7 +293,7 @@ void exec_add(Info *s)
  * @param s Pointer to the Info structure holding all operand, instruction and results info
  * @warning The result of the addition is stored in the result field of the Info structure and the flags are updated based on the result of the operation
  */
-void exec_adc(Info *s)
+static void exec_adc(Info *s)
 {
     unsigned long long result = (unsigned long long) s->op1.value + s->op2.value + read_carry_flag(s->registers);
     flags_update(s, result);
@@ -300,7 +306,7 @@ void exec_adc(Info *s)
  * @param s Pointer to the Info structure holding all operand, instruction and results info
  * @warning The result of the subtraction is stored in the result field of the Info structure and the flags are updated based on the result of the operation
  */
-void exec_sub(Info *s)
+static void exec_sub(Info *s)
 {
     unsigned long long result = (unsigned long long) s->op1.value - s->op2.value;
     flags_update(s, result);
@@ -313,7 +319,7 @@ void exec_sub(Info *s)
  * @param s Pointer to the Info structure holding all operand, instruction and results info
  * @warning The result of the subtraction is stored in the result field of the Info structure and the flags are updated based on the result of the operation
  */
-void exec_sbb(Info *s)
+static void exec_sbb(Info *s)
 {
     unsigned long long result = (unsigned long long) s->op1.value - s->op2.value - read_carry_flag(s->registers);
     flags_update(s, result);
@@ -326,7 +332,7 @@ void exec_sbb(Info *s)
  * @param s Pointer to the Info structure holding all operand, instruction and results info
  * @warning The result of the increment is stored in the result field of the Info structure and the flags are updated based on the result of the operation
  */
-void exec_inc(Info *s)
+static void exec_inc(Info *s)
 {
     unsigned long long result = (unsigned long long) s->op1.value + 1;
     flags_update(s, result);
@@ -339,7 +345,7 @@ void exec_inc(Info *s)
  * @param s Pointer to the Info structure holding all operand, instruction and results info
  * @warning The result of the decrement is stored in the result field of the Info structure and the flags are updated based on the result of the operation
  */
-void exec_dec(Info *s)
+static void exec_dec(Info *s)
 {
     unsigned long long result = (unsigned long long) s->op1.value - 1;
     flags_update(s, result);
@@ -352,7 +358,7 @@ void exec_dec(Info *s)
  * @param s Pointer to the Info structure holding all operand, instruction and results info
  * @warning The result of the AND operation is stored in the result field of the Info structure and the flags are updated based on the result of the operation
  */
-void exec_and(Info *s)
+static void exec_and(Info *s)
 {
     unsigned long long result = (unsigned long long) s->op1.value & s->op2.value;
     flags_update(s, result);
@@ -365,7 +371,7 @@ void exec_and(Info *s)
  * @param s Pointer to the Info structure holding all operand, instruction and results info
  * @warning The result of the OR operation is stored in the result field of the Info structure and the flags are updated based on the result of the operation
  */
-void exec_or(Info *s)
+static void exec_or(Info *s)
 {
     unsigned long long result = (unsigned long long) s->op1.value | s->op2.value;
     flags_update(s, result);
@@ -378,7 +384,7 @@ void exec_or(Info *s)
  * @param s Pointer to the Info structure holding all operand, instruction and results info
  * @warning The result of the XOR operation is stored in the result field of the Info structure and the flags are updated based on the result of the operation
  */
-void exec_xor(Info *s)
+static void exec_xor(Info *s)
 {
     unsigned long long result = (unsigned long long) s->op1.value ^ s->op2.value;
     flags_update(s, result);
@@ -391,7 +397,7 @@ void exec_xor(Info *s)
  * @param s Pointer to the Info structure holding all operand, instruction and results info
  * @warning The result of the NOT operation is stored in the result field of the Info structure and the flags are updated based on the result of the operation
  */
-void exec_not(Info *s)
+static void exec_not(Info *s)
 {
     unsigned long long result = (unsigned long long) ~s->op1.value;
     flags_update(s, result);
@@ -404,7 +410,7 @@ void exec_not(Info *s)
  * @param s Pointer to the Info structure holding all operand, instruction and results info
  * @warning The result of the NEG operation is stored in the result field of the Info structure and the flags are updated based on the result of the operation
  */
-void exec_neg(Info *s)
+static void exec_neg(Info *s)
 {
     unsigned long long result = (unsigned long long) -s->op1.value;
     flags_update(s, result);
@@ -417,7 +423,7 @@ void exec_neg(Info *s)
  * @param s Pointer to the Info structure holding all operand, instruction and results info
  * @warning The result of the XCHG operation is stored in the op1 and op2 fields of the Info structure and the flags are not updated based on the result of the operation
  */
-void exec_xchg(Info *s)
+static void exec_xchg(Info *s)
 {
     // Fetches each value
     long long val1 = s->op1.value;
@@ -425,20 +431,4 @@ void exec_xchg(Info *s)
     // commits each value
     commit_operand(s, &s->op1, val2);
     commit_operand(s, &s->op2, val1);
-    // cleans the state
-    clean(s);
-}
-
-static void commit_operand (Info* current_instruction_state, Operand* op, long long value)
-{
-    if (strcmp(op->op_type, "memory") == 0) {
-        write_mem(current_instruction_state->table, op->address, (uint8_t*)&value, op->size, 1);
-    } else if (strcmp(op->op_type, "register") == 0) {
-        uint8_t is_high = (op->address <= 3 && op->size == 1);
-        write_reg(current_instruction_state->registers, op->address, value, op->size, is_high);
-    }
-    else
-    {
-        printf("Error: Unknown operand type %s\n", op->op_type);
-    }
 }

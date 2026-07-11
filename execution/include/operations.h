@@ -13,25 +13,11 @@
 
 
 // --------------------------------------------------
-// Structures
+// Exposed Structures
 // --------------------------------------------------
 
-// Operand info structures
-typedef struct Operand Operand;
-
-// Operations Info structure
+// Operation Info structure
 typedef struct Info Info;
-
-// Instruction Map structure
-typedef struct InstructionMap InstructionMap;
-
-// ---------------------------------------------------
-// Aliases
-// ---------------------------------------------------
-
-// Standard instruction function signature alias
-typedef void (*InstructionFunc)(Info *);
-
 
 // ---------------------------------------------------
 // Prototypes
