@@ -10,6 +10,7 @@ void exec_xor(Info *s); void exec_not(Info *s); void exec_neg(Info *s);
 void exec_xchg(Info *s);
 void set_result_info(Info *current_state);
 void set_result(Info *current_instruction_state);
+static void commit_operand (Info* current_instruction_state, Operand* op, long long value);
 
 
 // --------------------------------------------------------------------------------
@@ -74,7 +75,7 @@ InstructionMap dispatch_table[] = {
 
 Info* create_operand_state ()
 {
-    Info *op_state = calloc(1, sizeof(Info));
+    Info *op_state = (Info*)calloc(1, sizeof(Info));
 
     if (op_state == NULL)
     {
@@ -86,8 +87,7 @@ Info* create_operand_state ()
 
 void free_operand_state (Info* s)
 {
-    if (s == NULL) return;
-    free(s);
+    if (s) free(s);
 }
 
 // ----------------------------
@@ -134,26 +134,11 @@ void set_table_ref (Info *current_state, Table *t)
 // -------------------
 
 
-void clean(Info *current_instruction_state)
-{
-    current_instruction_state->instruction = NULL;
-    current_instruction_state->op1.address = 0;
-    current_instruction_state->op1.value = 0;
-    current_instruction_state->op1.size = 0;
-    current_instruction_state->op1.op_type = NULL;
-    current_instruction_state->op1.visual_rep = 0;
-
-    current_instruction_state->op2.address = 0;
-    current_instruction_state->op2.value = 0;
-    current_instruction_state->op2.size = 0;
-    current_instruction_state->op2.op_type = NULL;
-    current_instruction_state->op2.visual_rep = 0;
-
-    current_instruction_state->result.address = 0;
-    current_instruction_state->result.value = 0;
-    current_instruction_state->result.size = 0;
-    current_instruction_state->result.op_type = NULL;
-    current_instruction_state->result.visual_rep = 0;
+void clean(Info *s) {
+    memset(&s->op1, 0, sizeof(Operand));
+    memset(&s->op2, 0, sizeof(Operand));
+    memset(&s->result, 0, sizeof(Operand));
+    s->instruction = NULL;
 }
 
 //--------------------------------
@@ -169,7 +154,9 @@ void dispatch(Info *current_instruction_state)
     for (int i = 0; i < TABLE_SIZE; i++) {
         if (strcmp(current_instruction_state->instruction, dispatch_table[i].instruction) == 0) {
             dispatch_table[i].func(current_instruction_state);
-            set_result(current_instruction_state);
+            if (strcmp(current_instruction_state->instruction, "xchg") != 0) {
+                set_result(current_instruction_state);
+            }
             return;
         }
     }
@@ -221,15 +208,7 @@ void set_result_info (Info *current_state)
  */
 void set_result(Info *current_instruction_state)
 {
-    if (strcmp(current_instruction_state->result.op_type, "memory") == 0)
-    {
-        write_mem(current_instruction_state->table, current_instruction_state->result.address, (uint8_t*)&current_instruction_state->result.value, current_instruction_state->result.size, 1);
-    }
-    else if (strcmp(current_instruction_state->result.op_type, "register") == 0)
-    {
-        uint8_t is_high = (current_instruction_state->result.address <= 3 && current_instruction_state->result.size == 1) ? 1 : 0;
-        write_reg(current_instruction_state->registers, current_instruction_state->result.address, current_instruction_state->result.value, current_instruction_state->result.size, is_high);
-    }
+    commit_operand(current_instruction_state, &current_instruction_state->result, current_instruction_state->result.value);
     clean(current_instruction_state);
 }
 
@@ -440,10 +419,26 @@ void exec_neg(Info *s)
  */
 void exec_xchg(Info *s)
 {
-    unsigned long long temp = s->op1.value;
-    s->op1.value = s->op2.value;
-    s->op2.value = temp;
-
-    // Requires to set the result info based on the new op1 value as it is the one that will be written back to memory or register
+    // Fetches each value
+    long long val1 = s->op1.value;
+    long long val2 = s->op2.value;
+    // commits each value
+    commit_operand(s, &s->op1, val2);
+    commit_operand(s, &s->op2, val1);
+    // cleans the state
+    clean(s);
 }
 
+static void commit_operand (Info* current_instruction_state, Operand* op, long long value)
+{
+    if (strcmp(op->op_type, "memory") == 0) {
+        write_mem(current_instruction_state->table, op->address, (uint8_t*)&value, op->size, 1);
+    } else if (strcmp(op->op_type, "register") == 0) {
+        uint8_t is_high = (op->address <= 3 && op->size == 1);
+        write_reg(current_instruction_state->registers, op->address, value, op->size, is_high);
+    }
+    else
+    {
+        printf("Error: Unknown operand type %s\n", op->op_type);
+    }
+}
