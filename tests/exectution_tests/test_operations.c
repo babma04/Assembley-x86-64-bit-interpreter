@@ -45,7 +45,7 @@ static int tests_passed = 0;
 static Info *make_info(CPURegs **out_regs, Table **out_table)
 {
     Info    *info  = create_operand_state();
-    CPURegs *regs  = CPURegs_c();
+    CPURegs *regs  = CPURegs_create();
     Table   *table = table_init();
 
     if (!info || !regs || !table) return NULL;
@@ -98,7 +98,7 @@ TEST(test_free_operand_state_no_crash)
 TEST(test_set_registers_ref_no_crash)
 {
     Info    *info = create_operand_state();
-    CPURegs *regs = CPURegs_c();
+    CPURegs *regs = CPURegs_create();
     ASSERT(info && regs);
 
     set_registers_ref(info, regs);   // must not crash
