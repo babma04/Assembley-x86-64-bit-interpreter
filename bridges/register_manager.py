@@ -45,10 +45,10 @@ class Registers_Interface:
 
         self.lib.write_reg.argtypes = [
             ctypes.c_void_p,      # Pointer to the struct in memory
-            ctypes.c_int,                       # reg_id
+            ctypes.c_uint8,                      # reg_id
             ctypes.c_int64,                     # value to write
-            ctypes.c_int,                       # byte size of the reg (1, 2, 4, 8)
-            ctypes.c_int                        # is_high
+            ctypes.c_uint8,                      # byte size of the reg (1, 2, 4, 8)
+            ctypes.c_uint8                       # is_high
         ]
         self.lib.read_8b_reg.argtypes = [
             ctypes.c_void_p,      # Pointer to the struct in memory
@@ -74,12 +74,12 @@ class Registers_Interface:
 
         self.lib.set_reg_sign.argtypes = [
             ctypes.c_void_p,
-            ctypes.c_int,                       # reg_id
-            ctypes.c_int                         # signed flag (0/1)
+            ctypes.c_uint8,                      # reg_id
+            ctypes.c_uint8                        # signed flag (0/1)
         ]
         self.lib.is_signed.argtypes = [
             ctypes.c_void_p,
-            ctypes.c_int                          # reg_id
+            ctypes.c_uint8                         # reg_id
         ]
         self.lib.is_signed.restype = ctypes.c_int
 
