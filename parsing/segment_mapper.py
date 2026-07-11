@@ -521,6 +521,63 @@ class Segment_Mapper:
     # ------------------------
     # Constant related methods
     # ------------------------
+
+    def load_constant(self, line: list[str], index: int) -> None:
+        """
+        Takes care of constant storing
+        
+        :param line: full line of code that has a constant declaration
+        :type line: list[str]
+        :param index: number of that line of the code
+        :type index: int
+        """
+        if line[0] == "#define":
+            self.load_c_constant(line, index)
+        
+        elif not self.is_valid_constant_declaration(line, index):
+            sys.exit(-3)
+        self.constants[line[0]]['line'] = index
+        if Segment_Mapper.has_size_calculation(line):
+            variable: str = line[len(line)-1]
+            value: int | str = self.get_size_constant_value(variable, index, line[0])
+        else:
+            try:
+                value: int | str = self.get_constant_value(line[2], index)
+            except ValueError as e:
+                print(e)
+                sys.exit(-3)
+        self.constants[line[0]]['value'] = value    # Only values not passed as bytes
+
+    # ------------------------
+    # Constant validation
+    # ------------------------
+
+    def load_c_constant(self, line: list[str], index: int) -> None:
+        """
+        Takes care of constant storing for C-style constants
+        
+        :param line: full line of code that has a constant declaration
+        :type line: list[str]
+        :param index: number of that line of the code
+        :type index: int
+        """
+        if len(line) < 3:
+            print(f"INVALID CONSTANT DECLARATION AT LINE {index}. Exiting program on a SyntaxError...")
+            sys.exit(-3)
+        elif Segment_Mapper.exists_in_section(line[1], self.data_segment) or Segment_Mapper.exists_in_section(line[1], self.rodata_segment) or Segment_Mapper.exists_in_section(line[1], self.bss_segment) or Segment_Mapper.exists_in_section(line[1], self.constants):
+            print(f"INVALID CONSTANT DECLARATION AT LINE {index}. Label {line[1]} already in use. Exiting program on a SyntaxError...")
+            sys.exit(-3)
+        elif not Segment_Mapper.valid_variable_name(line[1]):
+            print(f"INVALID CONSTANT NAME {line[1]} AT LINE {index}. Exiting program on a SyntaxError...")
+            sys.exit(-3)
+        self.constants[line[1]]['line'] = index
+        try:
+            value: int | str = self.get_constant_value(line[2], index)
+        except ValueError as e:
+            print(e)
+            sys.exit(-3)
+        self.constants[line[1]]['value'] = value    # Only values not passed as bytes
+
     
     def is_valid_constant_declaration(self, line: list[str], index: int) -> bool:
         """
@@ -559,6 +616,10 @@ class Segment_Mapper:
             return False
         return True
     
+    # ------------------------
+    # Constant definition parser
+    # ------------------------
+
     def valid_size_calculation(self, line: list[str], index: int) -> bool:
         """
         Verifies that the size calculation is valid.
@@ -579,58 +640,6 @@ class Segment_Mapper:
             return False
         return True        
                 
-
-    def load_constant(self, line: list[str], index: int) -> None:
-        """
-        Takes care of constant storing
-        
-        :param line: full line of code that has a constant declaration
-        :type line: list[str]
-        :param index: number of that line of the code
-        :type index: int
-        """
-        if line[0] == "#define":
-            self.load_c_constant(line, index)
-        
-        elif not self.is_valid_constant_declaration(line, index):
-            sys.exit(-3)
-        self.constants[line[0]]['line'] = index
-        if Segment_Mapper.has_size_calculation(line):
-            variable: str = line[len(line)-1]
-            value: int | str = self.get_size_constant_value(variable, index, line[0])
-        else:
-            try:
-                value: int | str = self.get_constant_value(line[2], index)
-            except ValueError as e:
-                print(e)
-                sys.exit(-3)
-        self.constants[line[0]]['value'] = value    # Only values not passed as bytes
-
-    def load_c_constant(self, line: list[str], index: int) -> None:
-        """
-        Takes care of constant storing for C-style constants
-        
-        :param line: full line of code that has a constant declaration
-        :type line: list[str]
-        :param index: number of that line of the code
-        :type index: int
-        """
-        if len(line) < 3:
-            print(f"INVALID CONSTANT DECLARATION AT LINE {index}. Exiting program on a SyntaxError...")
-            sys.exit(-3)
-        elif Segment_Mapper.exists_in_section(line[1], self.data_segment) or Segment_Mapper.exists_in_section(line[1], self.rodata_segment) or Segment_Mapper.exists_in_section(line[1], self.bss_segment) or Segment_Mapper.exists_in_section(line[1], self.constants):
-            print(f"INVALID CONSTANT DECLARATION AT LINE {index}. Label {line[1]} already in use. Exiting program on a SyntaxError...")
-            sys.exit(-3)
-        elif not Segment_Mapper.valid_variable_name(line[1]):
-            print(f"INVALID CONSTANT NAME {line[1]} AT LINE {index}. Exiting program on a SyntaxError...")
-            sys.exit(-3)
-        self.constants[line[1]]['line'] = index
-        try:
-            value: int | str = self.get_constant_value(line[2], index)
-        except ValueError as e:
-            print(e)
-            sys.exit(-3)
-        self.constants[line[1]]['value'] = value    # Only values not passed as bytes
 
     def get_size_constant_value(self, variable: str, index: int, label: str) -> int | str:
         """
