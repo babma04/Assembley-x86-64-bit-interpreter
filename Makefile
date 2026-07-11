@@ -2,64 +2,68 @@ CC = gcc
 CFLAGS = -O3 -fPIC -I./execution/include
 LDFLAGS = -shared
 
-// == Directories ====
+# == Directories ====
 
 SRC_DIR = execution/src
 INC_DIR = execution/include
 LIB_DIR = lib
 BUILD_DIR = build
 
-DIR_TARGET = $(LIB_DIR)
-
-// == TESTS ==========
-
-TEST_DIR = tests/execution_tests
-TEST_LIB_DIR = tests/lib
+# Note: Your image shows the folder is named "exectution_tests" (with an extra 't').
+# Ensure this variable exactly matches the folder name in your system!
+TEST_DIR = tests/exectution_tests
 TEST_BUILD_DIR = tests/build
+TEST_BIN_DIR = tests/bin
 
-TEST_TARGET = $(TEST_LIB_DIR)
+# == Targets ========
 
-
-// == Rules ==========
+# Name of the shared library
+SHARED_LIB = $(LIB_DIR)/libexecution.so
 
 # Find all .c files in src/
 SRCS = $(wildcard $(SRC_DIR)/*.c)
-# Place .o files in the build/ folder instead of src/
+# Place .o files in the build/ folder
 OBJS = $(SRCS:$(SRC_DIR)/%.c=$(BUILD_DIR)/%.o)
 
-# FInd all .c files in tests/
+# Find all .c files in tests/
 TEST_SRCS = $(wildcard $(TEST_DIR)/*.c)
-# Place .o files in the tests/build/ folder instead of tests/
-TEST_OBJS = $(TEST_SRCS:$(TEST_DIR)/%.c=$(TEST_BUILD_DIR)/%.o)
+# Create executable targets for each test in tests/bin/
+TEST_BINS = $(TEST_SRCS:$(TEST_DIR)/%.c=$(TEST_BIN_DIR)/%)
 
-all: directories $(DIR_TARGET) && $(TEST_TARGET)
+
+# == Rules ==========
+
+.PHONY: all directories clean test
+
+all: directories $(SHARED_LIB) $(TEST_BINS)
 
 directories:
 	@mkdir -p $(LIB_DIR)
 	@mkdir -p $(BUILD_DIR)
-	@mkdir -p $(TEST_LIB_DIR)
 	@mkdir -p $(TEST_BUILD_DIR)
+	@mkdir -p $(TEST_BIN_DIR)
 
-$(DIR_TARGET): $(OBJS)
+# Rule to build the shared library
+$(SHARED_LIB): $(OBJS)
 	$(CC) $(LDFLAGS) -o $@ $^
 
-# Rule to compile .c to .o and put them in build/
+# Rule to compile execution .c to .o
 $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(TEST_BUILD_DIR)/%.o: $(TEST_DIR)/%.c
-	$(CC) $(CFLAGS) -c $< -o $@
+# Rule to compile AND link test executables against the shared library
+$(TEST_BIN_DIR)/%: $(TEST_DIR)/%.c $(SHARED_LIB)
+	$(CC) -O3 -I./execution/include $< -o $@ -L$(LIB_DIR) -lexecution -Wl,-rpath=$$(pwd)/$(LIB_DIR)
 
-test: $(TEST_TARGET)
+test: all
 	@echo "Running tests..."
-	./tests/execution_tests/run_tests.sh
-
+	@for test in $(TEST_BINS); do \
+		echo "=> Executing $$test"; \
+		./$$test || exit 1; \
+	done
 
 clean:
-	rm -rf $(BUILD_DIR) $(LIB_DIR)
-	@echo "Cleaned build and lib folders."
-
-	rm -rf $(TEST_BUILD_DIR) $(TEST_LIB_DIR)
-	@echo "Cleaned test build and test lib folders."
-
-.PHONY: all directories clean test
+	rm -rf $(BUILD_DIR)/* $(LIB_DIR)/*
+	@echo "Cleaned execution build and lib folders."
+	rm -rf $(TEST_BUILD_DIR)/* $(TEST_BIN_DIR)/*
+	@echo "Cleaned test build and bin folders."
