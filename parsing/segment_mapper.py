@@ -109,7 +109,6 @@ class Segment_Mapper:
         self.memory_list :list[list[str]]= []
         
         # ---------------------------------------
-        #(CURRENT UPDATE WILL MAKE THIS OBSOLETE)
         # Should only store addresses as actually memory values are stored in Data_Memory class
         self.rodata_segment: DataSectionInfo = {}
         self.data_segment: DataSectionInfo = {}
@@ -157,7 +156,10 @@ class Segment_Mapper:
 
     def parse_section(self) -> None:
         """
-        TODO
+        Parsing loop for the .data, .rodata and .bss sections of the program.\n
+        It iterates through the memory_list, identifies section declarations, and calls appropriate methods to load data or bss segments into memory.\n
+        It also validates the format of declarations and handles constant declarations.\n
+        If any syntax errors are found during parsing, the program exits gracefully with appropriate error messages.
         """
         # Pointers for lines of usable memory and address at use from a Data_memory object
         index: int = 0
@@ -486,7 +488,7 @@ class Segment_Mapper:
         """
         if line[0] != "global":
             return -1   # Partial error (meaning no global found and possibly wrong line was passed)
-        elif line[1] != self.valid_start or next_line[0] != self.valid_start + ":":
+        elif (len(line) > 1 and line[1] != self.valid_start) or next_line[0] != self.valid_start + ":":
             return 1    # Complete error (no valid start passed)
         else: return 0
         
@@ -587,7 +589,10 @@ class Segment_Mapper:
         :param index: number of that line of the code
         :type index: int
         """
-        if not self.is_valid_constant_declaration(line, index):
+        if line[0] == "#define":
+            self.load_c_constant(line, index)
+        
+        elif not self.is_valid_constant_declaration(line, index):
             sys.exit(-3)
         self.constants[line[0]]['line'] = index
         if Segment_Mapper.has_size_calculation(line):
@@ -600,6 +605,32 @@ class Segment_Mapper:
                 print(e)
                 sys.exit(-3)
         self.constants[line[0]]['value'] = value    # Only values not passed as bytes
+
+    def load_c_constant(self, line: list[str], index: int) -> None:
+        """
+        Takes care of constant storing for C-style constants
+        
+        :param line: full line of code that has a constant declaration
+        :type line: list[str]
+        :param index: number of that line of the code
+        :type index: int
+        """
+        if len(line) < 3:
+            print(f"INVALID CONSTANT DECLARATION AT LINE {index}. Exiting program on a SyntaxError...")
+            sys.exit(-3)
+        elif Segment_Mapper.exists_in_section(line[1], self.data_segment) or Segment_Mapper.exists_in_section(line[1], self.rodata_segment) or Segment_Mapper.exists_in_section(line[1], self.bss_segment) or Segment_Mapper.exists_in_section(line[1], self.constants):
+            print(f"INVALID CONSTANT DECLARATION AT LINE {index}. Label {line[1]} already in use. Exiting program on a SyntaxError...")
+            sys.exit(-3)
+        elif not Segment_Mapper.valid_variable_name(line[1]):
+            print(f"INVALID CONSTANT NAME {line[1]} AT LINE {index}. Exiting program on a SyntaxError...")
+            sys.exit(-3)
+        self.constants[line[1]]['line'] = index
+        try:
+            value: int | str = self.get_constant_value(line[2], index)
+        except ValueError as e:
+            print(e)
+            sys.exit(-3)
+        self.constants[line[1]]['value'] = value    # Only values not passed as bytes
 
     def get_size_constant_value(self, variable: str, index: int, label: str) -> int | str:
         """
@@ -753,7 +784,7 @@ class Segment_Mapper:
         :return: True if the line defines a constant, False if it doesn't
         :rtype: bool
         """
-        return "equ" in line or "EQU" in line
+        return "equ" in line or "EQU" in line or line[0] == "#define"
         
     @staticmethod
     def has_size_calculation(line: list[str]) -> bool:

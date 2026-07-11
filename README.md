@@ -127,21 +127,23 @@ Constants declarations are a bit more nuanced:
             - <constant_uppercased_label> equ: '<character_value>';
             - <constant_uppercased_label> equ: "<string_value>";
 
+Standard c constant definitions are also supported!
+
 ### Operand syntax rules
 
-    - Operands writen with different components should have no spaces in between each component of the expression:
+    - Operands written with different components should have no spaces in between each component of the expression:
 
         ex.:
         - What to avoid: [rbx + 4 * 1] or CONSTANT + 4
         - Correct version: [rbx+4*1]   or CONSTANT+4
 
-    - If an operand is an immidiate value it should always be simplified to the maximum extent possible avoiding complex nested paranteses expresions:
+    - If an operand is an immediate value it should always be simplified to the maximum extent possible avoiding complex nested parentheses expression:
 
         ex.: 
         - What to avoid: ((4+3+1)*4 + 6 + (7 + 8)*2)
         - Correct version: 58
 
-    - All immidiate values should be integer values (not decimal point values)
+    - All immediate values should be integer values (not decimal point values)
 
         ex.:
         - What to avoid: mov eax, 3.14
