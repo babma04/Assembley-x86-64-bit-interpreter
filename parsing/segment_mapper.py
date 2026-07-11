@@ -290,12 +290,12 @@ class Segment_Mapper:
         addresses: list[Address] = []
 
         if section == "data":
-            self.data_segment[line[0]]['size'] = size
+            self.data_segment[line[0]] = {'size': size, 'addresses': []}
             for i in range(size):
                 addresses.append(current_rip + i)
             self.data_segment[line[0]]['addresses'] = addresses
         else:
-            self.rodata_segment[line[0]]['size'] = size
+            self.rodata_segment[line[0]] = {'size': size, 'addresses': []}
             for i in range(size):
                 addresses.append(current_rip + i)
             self.rodata_segment[line[0]]['addresses'] = addresses
@@ -323,12 +323,12 @@ class Segment_Mapper:
         addresses: list[Address] = []
 
         if section == "data":
-            self.data_segment[line[0]]['size'] = size
+            self.data_segment[line[0]] = {'size': size, 'addresses': []}
             for i in range(size):
                 addresses.append(current_rip + i)
             self.data_segment[line[0]]['addresses'] = addresses
         else:
-            self.rodata_segment[line[0]]['size'] = size
+            self.rodata_segment[line[0]] = {'size': size, 'addresses': []}
             for i in range(size):
                 addresses.append(current_rip + i)
             self.rodata_segment[line[0]]['addresses'] = addresses
@@ -358,12 +358,12 @@ class Segment_Mapper:
         addresses: list[Address] = []
 
         if section == "data":
-            self.data_segment[line[0]]['size'] = size
+            self.data_segment[line[0]] = {'size': size, 'addresses': []}
             for i in range(size):
                 addresses.append(current_rip + i)
             self.data_segment[line[0]]['addresses'] = addresses
         else:
-            self.rodata_segment[line[0]]['size'] = size
+            self.rodata_segment[line[0]] = {'size': size, 'addresses': []}
             for i in range(size):
                 addresses.append(current_rip + i)
             self.rodata_segment[line[0]]['addresses'] = addresses
@@ -386,7 +386,8 @@ class Segment_Mapper:
             times: int = int(tokens[2])
             number_of_bytes: int = self.SIZE_DIRECTIVES[tokens[1]][0]    
             size: int = number_of_bytes * times
-            self.bss_segment[tokens[0]]['size'] = size
+            if not Segment_Mapper.exists_in_section(tokens[0], self.bss_segment):
+                self.bss_segment[tokens[0]] = {'size': size, 'addresses': []}
 
             addresses: list[Address] = []
             for i in range(size):
@@ -469,7 +470,7 @@ class Segment_Mapper:
                 index += 1
                 continue
 
-            elif tokens[1].lower == self.valid_start and self.find_start(tokens, self.memory_list[index + 1]) == -1 or self.find_start(tokens, self.memory_list[index + 1]) == 0:
+            elif tokens[1].lower() == self.valid_start and self.find_start(tokens, self.memory_list[index + 1]) == -1 or self.find_start(tokens, self.memory_list[index + 1]) == 0:
                 return index + 1
             
             index += 1
@@ -570,7 +571,7 @@ class Segment_Mapper:
         elif not Segment_Mapper.valid_variable_name(line[1]):
             print(f"INVALID CONSTANT NAME {line[1]} AT LINE {index}. Exiting program on a SyntaxError...")
             sys.exit(-3)
-        self.constants[line[1]]['line'] = index
+        self.constants[line[1]] = {'line': index, 'value': ""}
         try:
             value: int | str = self.get_constant_value(line[2], index)
         except ValueError as e:
