@@ -16,6 +16,7 @@ struct Table {
 // --- Prototypes ---
 static int write_block (Table* table, uint64_t v_addr, uint8_t *data, uint8_t size, uint8_t create_page);
 static int read_block (Table* table, uint64_t v_addr, uint8_t *buffer, uint8_t size);
+static void free_recursive (Table* table, int level);
 
 
 Table* table_init()
@@ -32,18 +33,27 @@ Table* table_init()
 void free_table(Table* table)
 {
     if (!table) return;
+    free_recursive(table, 1);
+}
 
-    // Free all allocated pages in the table
-    for (int i = 0; i < MAX_PAGES; i++) {
-        if (table->entries[i]) {
-            if (i == MAX_PAGES - 1) {
-                free(table->entries[i]); // Free the page itself
-            } else {
-                free_table((Table*)table->entries[i]); // Recursively free sub-tables
+static void free_recursive (Table* table, int level)
+{
+    if (!table) return;
+    for (int i = 0; i < MAX_PAGES; i++)
+    {
+        if (table->entries[i])
+        {
+            if (level == 4) // Table to pages
+            {
+                free(table->entries[i]);
+            }
+            else
+            {
+                free_recursive((Table*)table->entries[i], level + 1);
             }
         }
     }
-    // Free the table itself
+    // Free the current table after freeing all its entries
     free(table);
 }
 
