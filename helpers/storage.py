@@ -6,28 +6,87 @@ from conftest import CACHE_DIR, PROJECT_ROOT
 
 class Storage:
     """
-    Utility class for file storage operations.\n
+    Utility class for file storage operations.
     Takes care of all creation, reading and writing operations to files.
     All file creations are done in the project directory and to a JSON file format.
-    Contains static methods only.\n
+    Contains static methods only.
+
     Author: João Carilho Louro
     """
     
     @staticmethod
+    def _get_path(file_name: str, use_cache: bool = True) -> str:
+        """
+        Internal helper to resolve file paths and ensure directories exist.
+
+        :param file_name: The name of the file with extension.
+        :type file_name: str
+        :param use_cache: Whether to use the cache directory or project root.
+        :type use_cache: bool
+        :return str: The resolved file path.
+        """
+        base_dir = CACHE_DIR if use_cache else PROJECT_ROOT
+        if use_cache and not os.path.exists(base_dir):
+            os.makedirs(base_dir)
+        return os.path.join(base_dir, file_name)
+
+    @staticmethod
+    def _validate_json_extension(file_name: str) -> None:
+        """
+        Internal helper to validate file extensions.
+
+        :param file_name: The name of the file with extension.
+        :type file_name: str
+        :raises ValueError: If the file does not have a .json extension.
+        """
+        if not file_name.endswith('.json'):
+            raise ValueError(f"File '{file_name}' must have a .json extension.")    
+
+    @staticmethod
     def clean_cache() -> None:
         """
-        Cleans the cache directory by removing all files in it.
+        Cleans the cache directory by removing all files in it, except valid_instructions.json.
         """
-        if os.path.exists(CACHE_DIR):
-            for file_name in os.listdir(CACHE_DIR):
-                file_path = os.path.join(CACHE_DIR, file_name)
-                if file_path == os.path.join(CACHE_DIR, "valid_instructions.json"):
-                    continue  # Skip the valid_instructions.json file   
-                try:
-                    if os.path.isfile(file_path):
-                        os.remove(file_path)
-                except Exception as e:
-                    print(f"Error while deleting file {file_path}: {e}")
+        if not os.path.exists(CACHE_DIR):
+            return
+
+        protected_file = Storage._get_path("valid_instructions.json")
+        for name in os.listdir(CACHE_DIR):
+            file_path = os.path.join(CACHE_DIR, name)
+            if file_path == protected_file:
+                continue
+            try:
+                if os.path.isfile(file_path):
+                    os.remove(file_path)
+            except Exception as e:
+                print(f"Error while deleting file {file_path}: {e}")
+    
+    @staticmethod
+    def update_valid_instructions(new_data: dict[str, dict[str, int]]) -> None:
+        """
+        Helper method to update the valid instructions in the settings file (valid_instructions.json).
+        Enables unperturbed updates to the instruction set without overwriting other settings.
+
+        :param new_data: A dictionary containing the new valid instructions.
+        :type new_data: dict[str, dict[str, int]]
+        :raises FileNotFoundError: If the configuration file is missing from cache.
+        """
+        file_name = "valid_instructions.json"
+        file_path = Storage._get_path(file_name)
+
+        if not os.path.isfile(file_path):
+            raise FileNotFoundError(f"{file_name} does not exist in the cache directory.")
+
+        with open(file_path, "r") as file:
+            data = json.load(file)
+
+        # Update only the instruction sections safely
+        for key, value in new_data.items():
+            if key in data and isinstance(data[key], dict):
+                data[key] = value
+
+        with open(file_path, "w") as file:
+            json.dump(data, file, indent=4)
 
     @staticmethod
     def get_raw_file_name(file_name: str) -> str:
@@ -37,204 +96,137 @@ class Storage:
         :param file_name: The name of the file with extension.
         :type file_name: str
         :return str: The raw file name with the extension.
-        :requires: file_name includes the extension
         """
-        return os.path.basename(file_name)  # type: ignore
-
+        return os.path.basename(file_name)
 
     @staticmethod
-    def convert_to_json(file_name :str) -> str:
+    def convert_to_json(file_name: str) -> str:
         """
-        Convert any given file to a JSON file.
+        Convert any given file to a JSON file, stripping out comments and layout spacing.
 
         :param file_name: The name of the file with extension.
         :type file_name: str
-        :return str: The name of the new JSON file and creates a .json file with the same content.
-        :requires: file_name includes the extension
+        :return str: The name of the new JSON file.
         """
-        raw_text :list[str]= Storage.load_file(file_name).split("\n")
-        clean_lines :list[str] = []
+        raw_text = Storage.load_file(file_name).splitlines()
+        clean_lines : list[str] = []
 
         for line in raw_text:
-            if ";" in line:
-                line = line.split(";")[0]
-                if line == "":
-                    continue
-            clean_lines.append(line.strip())
+            clean_line = line.split(";")[0].strip()
+            if clean_line:  # Only preserve real instructions and labels
+                clean_lines.append(clean_line)
         
-        new_file_name:str = os.path.splitext(Storage.get_raw_file_name(file_name))[0] + ".json"
-        print(f"File {file_name} converted to {new_file_name} and saved in the project folder.")
+        raw_file_name = os.path.splitext(Storage.get_raw_file_name(file_name))[0]
+        new_file_name = f"{raw_file_name}.json"
+
         Storage.save_file(new_file_name, clean_lines)
         return new_file_name
         
 
     @staticmethod
-    def save_file(file_name :str, data :list[str] | list[ list[str]]) -> None:
+    def save_file(file_name: str, data: list[str] | list[list[str]]) -> None:
         """
-        Save data to a JSON file in the project folder.
-        File must have the json extension.
+        Save data to a JSON file in the project cache directory.
 
         :param file_name: The full name of the file.
         :type file_name: str
         :param data: The data to save (must be serializable to JSON).
-        :type data: list of strings
-        :return None: Nothing
-        :raises SyntaxError: if file_name does not end with '.json'
+        :type data: list
+        :raises ValueError: if file_name does not end with '.json'
         """
-
-        if not file_name.endswith('.json'):
-            raise SyntaxError
-
-        
-        if not os.path.exists(CACHE_DIR):
-            os.makedirs(CACHE_DIR) # type: ignore
-
-        file_path:str = os.path.join(CACHE_DIR, file_name)  
+        Storage._validate_json_extension(file_name)
+        file_path = Storage._get_path(file_name)
         
         with open(file_path, "w") as file:
             json.dump(data, file, indent=4)
 
-
     @staticmethod
-    def save_file_dictionary(file_name :str, data :dict[str, str | dict[str, int]]) -> None:
+    def save_file_dictionary(file_name: str, data: dict[str, str | dict[str, int]]) -> None:
         """
-        Save dictionaries to a JSON file in the project folder.
-        File name must have the json extension.
+        Save dictionaries to a JSON file in the project cache directory if it doesn't exist.
 
         :param file_name: The full name of a new file.
         :type file_name: str
         :param data: The data to save (must be serializable to JSON).
-        :type data: list of strings
-        :return None: Nothing
-        :raises SyntaxError: if file_name does not end with '.json'
+        :type data: dict
+        :raises ValueError: if file_name does not end with '.json'
         """
-
-        if not file_name.endswith('.json'):
-            raise SyntaxError
-
-        if not os.path.exists(CACHE_DIR):
-            os.makedirs(CACHE_DIR) # type: ignore
-
-        file_path:str = os.path.join(CACHE_DIR, file_name)      
+        Storage._validate_json_extension(file_name)
+        file_path = Storage._get_path(file_name)      
 
         if not os.path.isfile(file_path):
             with open(file_path, "w") as file:
                 json.dump(data, file, indent=4)
 
-
-
     @staticmethod
-    def load_file(file_name :str) -> str:
+    def load_file(file_name: str) -> str:
         """
-        Load account information from a file and returns it in json format.
+        Load a file from the project root directory and return its contents as a single string.
 
-        :param file_name: The name of the file with extension.
+        :param file_name: Name of the file to load from the project root.
         :type file_name: str
-        :return str: The file's data, or an empty str if the file doesn't exist.
-        :requires: file_name includes the .json extension && the file exists
+        :return str: The file's contents string.
         """
-        file_path :str= os.path.join(PROJECT_ROOT, file_name)
+        file_path = Storage._get_path(file_name, use_cache=False)
         try:
-            with open(file_path) as f:
+            with open(file_path, "r") as f:
                 return f.read()
         except FileNotFoundError:
             print(f"Something went wrong! File {file_name} couldn't be opened.\n     Exiting program...\n")
             sys.exit(-1)
     
-
     @staticmethod
-    def load_file_lines(file_name :str) -> list[str]:
+    def load_file_lines(file_name: str) -> list[str]:
         """
-        Returns the contents of a JSON file previously converted into a single String as a list of every line in the file.
+        Returns the contents of a cached JSON file as a list of lines.
 
         :param file_name: The name of the file with extension.
         :type file_name: str
-        :return strings list: A list of strings, each representing a line in the file.
-        :requires: file_name includes the .json extension && the file exists 
+        :return list[str]: A list of strings parsed from JSON.
         """
-        file_path :str= os.path.join(CACHE_DIR, file_name)
+        file_path = Storage._get_path(file_name)
         with open(file_path, "r") as f:
             return json.load(f)
     
     @staticmethod
     def initialize_instructions() -> str:
         """
-        Initializes the instruction list json file
+        Initializes the base setting instruction json if absent from cache.
         """
-        file_name: str = "valid_instructions.json"
-        if not os.path.isfile(file_name):
-            data :dict[str, str | dict[str, int]]= {
+        file_name = "valid_instructions.json"
+
+        if not os.path.isfile(Storage._get_path(file_name)):
+            data : dict[str, dict[str, int] | str] = {
                 'valid start': "_start", 
                 'data_path': {
-                    'lea': 2,
-                    'mov': 2,
-                    'jmp': 1,
-                    'jb': 1,
-                    'jl': 1,
-                    'ja': 1,
-                    'jg': 1,
-                    'je': 1,
-                    'jne': 1,
-                    'jz': 1,
-                    'js': 1,
-                    'jc': 1,
-                    'jo': 1
+                    'lea': 2, 'mov': 2, 'jmp': 1, 'jb': 1, 'jl': 1, 'ja': 1,
+                    'jg': 1, 'je': 1, 'jne': 1, 'jz': 1, 'js': 1, 'jc': 1, 'jo': 1
                 },
                 'alu': {
-                    'cmp': 2,
-                    'add': 2,
-                    'adc': 2,
-                    'sub': 2,
-                    'sbb': 2,
-                    'inc': 1,
-                    'dec': 1,
-                    'and': 2,
-                    'or': 2,
-                    'xor': 2,
-                    'not': 1,
-                    'neg': 1,
-                    'xchg': 2
+                    'cmp': 2, 'add': 2, 'adc': 2, 'sub': 2, 'sbb': 2, 'inc': 1,
+                    'dec': 1, 'and': 2, 'or': 2, 'xor': 2, 'not': 1, 'neg': 1, 'xchg': 2
                 }, 
-                'fpu': {
-            
-                }
+                'fpu': {}
             }
             Storage.save_file_dictionary(file_name, data)
         return file_name
     
-
     @staticmethod
     def read_valid_start(file_name: str) -> str:
         """
-        Returns the accepted start declaration according to the settings file (valid_instructions.json)
-
-        :param file_name: name of the file that holds the settings
-        :type file_name: str
-        :return: the valid start declaration
-        :type: str
+        Returns the accepted start declaration according to the settings file.
         """
-        data: dict[str, str | dict[str, int]] = {}
-        file_path: str = os.path.join(CACHE_DIR, file_name)
-
+        file_path = Storage._get_path(file_name)
         with open(file_path, "r") as file:
             data = json.load(file)
-        return data['valid start']  # type: ignore
+        return data['valid start']
     
     @staticmethod
     def read_valid_instructions(file_name: str) -> dict[str, dict[str, int]]:
         """
-        Returns the valid instructions setting from the settings file (valid_instructions.json)
-                
-        :param file_name: name of the file that holds the settings
-        :type file_name: str
-        :return: the valid instructions for the current state of this program
-        :rtype: dict[str, dict[str, int]]
+        Returns the valid instructions setting from the settings file.
         """
-        data: dict[str, str | dict[str, int]] = {}
-        
-        with open(file_name, "r") as file:
+        file_path = Storage._get_path(file_name)
+        with open(file_path, "r") as file:
             data = json.load(file)
-        
-        ret_data: dict[str, dict[str, int]] = {key: value for key, value in data.items() if isinstance(value, dict)}
-        return ret_data
-
+        return {key: value for key, value in data.items() if isinstance(value, dict)}
