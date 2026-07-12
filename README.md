@@ -212,7 +212,7 @@ Valid exit codes:
 
 ## Usage
 
-This program can take up to one command-line argument providing a path to a asm file. If no file is detected or if an invalid file is detected the program will prompt for a valid file until the execution is haulted or untill one valid path is provided.
+This program can take up to one command-line argument providing a path to a asm file. If no file is detected or if an invalid file is detected the program will prompt for a valid file until the execution is halted or until one valid path is provided.
 
     ex:
     $py main.py example.asm 
@@ -228,9 +228,7 @@ This program can take up to one command-line argument providing a path to a asm 
 
     - Reforcing the syscalls supported by the program;
 
-    - Enable any type of memory addressing inplementing a more robust memory system with usable addresses;
-
-    - Implement a stack system and enable argument passing for the execution of the python program;
+    - Optimize the operands dispatch through an index array of operations instead of a loopup table
 
     - Implement a debugging execution type with gdb commands and one instruction at a time execution using the trap flag mechanism already implemented;
 
