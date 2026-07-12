@@ -9,7 +9,7 @@ INC_DIR = execution/include
 LIB_DIR = lib
 BUILD_DIR = build
 
-TEST_DIR = tests/exectution_tests
+TEST_DIR = tests/execution_tests
 TEST_BIN_DIR = tests/bin
 
 # == Targets & Libraries ========
