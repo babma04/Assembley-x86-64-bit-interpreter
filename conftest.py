@@ -16,7 +16,7 @@ import os
 import sys
 
 
-def _find_project_root(start_dir):
+def _find_project_root(start_dir: str) -> str:
     current = start_dir
     while True:
         if os.path.isdir(os.path.join(current, "bridges")):
@@ -31,6 +31,7 @@ def _find_project_root(start_dir):
 
 
 PROJECT_ROOT = _find_project_root(os.path.dirname(os.path.abspath(__file__)))
+CACHE_DIR = os.path.join(PROJECT_ROOT, "program_cache")
 BRIDGES_DIR = os.path.join(PROJECT_ROOT, "bridges")
 if BRIDGES_DIR not in sys.path:
     sys.path.insert(0, BRIDGES_DIR)

@@ -11,6 +11,7 @@ tests/bin/
 __pycache__/
 *.py[cod]
 *$py.class
+program_cache/
 
 # OS specific
 .DS_Store

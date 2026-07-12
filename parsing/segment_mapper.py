@@ -150,7 +150,6 @@ class Segment_Mapper:
             tokens: list[str] = re.findall(self.TOKENS_PATTERN, code_part)
             tokens = [token for token in tokens if not re.match(self.ELEMENTS_TO_SKIP, token)]
             self.memory_list.append(tokens)
-        
         Storage.save_file(file_name, self.memory_list)
 
 

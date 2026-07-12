@@ -2,9 +2,7 @@ import json
 import os
 import sys
 
-from conftest import PROJECT_ROOT
-
-PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))  # folder of the current script
+from conftest import CACHE_DIR, PROJECT_ROOT
 
 class Storage:
     """
@@ -16,6 +14,35 @@ class Storage:
     """
     
     @staticmethod
+    def clean_cache() -> None:
+        """
+        Cleans the cache directory by removing all files in it.
+        """
+        if os.path.exists(CACHE_DIR):
+            for file_name in os.listdir(CACHE_DIR):
+                file_path = os.path.join(CACHE_DIR, file_name)
+                if file_path == os.path.join(CACHE_DIR, "valid_instructions.json"):
+                    continue  # Skip the valid_instructions.json file   
+                try:
+                    if os.path.isfile(file_path):
+                        os.remove(file_path)
+                except Exception as e:
+                    print(f"Error while deleting file {file_path}: {e}")
+
+    @staticmethod
+    def get_raw_file_name(file_name: str) -> str:
+        """
+        Returns the raw file name with the extension.
+
+        :param file_name: The name of the file with extension.
+        :type file_name: str
+        :return str: The raw file name with the extension.
+        :requires: file_name includes the extension
+        """
+        return os.path.basename(file_name)  # type: ignore
+
+
+    @staticmethod
     def convert_to_json(file_name :str) -> str:
         """
         Convert any given file to a JSON file.
@@ -25,8 +52,6 @@ class Storage:
         :return str: The name of the new JSON file and creates a .json file with the same content.
         :requires: file_name includes the extension
         """
-        new_file_name :str= file_name.split(".")[0] + ".json"
-        
         raw_text :list[str]= Storage.load_file(file_name).split("\n")
         clean_lines :list[str] = []
 
@@ -36,7 +61,9 @@ class Storage:
                 if line == "":
                     continue
             clean_lines.append(line.strip())
-            
+        
+        new_file_name:str = os.path.splitext(Storage.get_raw_file_name(file_name))[0] + ".json"
+        print(f"File {file_name} converted to {new_file_name} and saved in the project folder.")
         Storage.save_file(new_file_name, clean_lines)
         return new_file_name
         
@@ -59,8 +86,11 @@ class Storage:
             raise SyntaxError
 
         
-        file_path :str= os.path.join(PROJECT_ROOT, file_name)
+        if not os.path.exists(CACHE_DIR):
+            os.makedirs(CACHE_DIR) # type: ignore
 
+        file_path:str = os.path.join(CACHE_DIR, file_name)  
+        
         with open(file_path, "w") as file:
             json.dump(data, file, indent=4)
 
@@ -82,8 +112,10 @@ class Storage:
         if not file_name.endswith('.json'):
             raise SyntaxError
 
-        
-        file_path :str= os.path.join(PROJECT_ROOT, file_name)
+        if not os.path.exists(CACHE_DIR):
+            os.makedirs(CACHE_DIR) # type: ignore
+
+        file_path:str = os.path.join(CACHE_DIR, file_name)      
 
         if not os.path.isfile(file_path):
             with open(file_path, "w") as file:
@@ -101,7 +133,7 @@ class Storage:
         :return str: The file's data, or an empty str if the file doesn't exist.
         :requires: file_name includes the .json extension && the file exists
         """
-        file_path :str= os.path.join(PROJECT_DIR, file_name)
+        file_path :str= os.path.join(PROJECT_ROOT, file_name)
         try:
             with open(file_path) as f:
                 return f.read()
@@ -120,7 +152,7 @@ class Storage:
         :return strings list: A list of strings, each representing a line in the file.
         :requires: file_name includes the .json extension && the file exists 
         """
-        file_path :str= os.path.join(PROJECT_ROOT, file_name)
+        file_path :str= os.path.join(CACHE_DIR, file_name)
         with open(file_path, "r") as f:
             return json.load(f)
     
@@ -182,7 +214,9 @@ class Storage:
         :type: str
         """
         data: dict[str, str | dict[str, int]] = {}
-        with open(file_name, "r") as file:
+        file_path: str = os.path.join(CACHE_DIR, file_name)
+
+        with open(file_path, "r") as file:
             data = json.load(file)
         return data['valid start']  # type: ignore
     
