@@ -27,10 +27,10 @@ def create_mapper_with_code(mock_storage, code_lines):
     """Helper to instantiate Segment_Mapper with injected assembly code."""
     mock_storage.load_file_lines.return_value = code_lines
     return Segment_Mapper(
-        file_name="dummy.asm",
+        file_name="main_test.asm",
         argvcount=1,
         argv=["./program"],
-        validation_file_name="dummy_valid.json"
+        validation_file_name="valid_instructions.json"
     )
 
 class TestSegmentMapperValidations:

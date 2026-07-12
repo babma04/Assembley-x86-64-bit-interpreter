@@ -1,7 +1,7 @@
 import os
 import sys
-from segment_mapper import Segment_Mapper
-from control_unit import Control_Unit
+from parsing.segment_mapper import Segment_Mapper
+from parsing.control_unit import Control_Unit
 from helpers.storage import Storage
 
 def main():

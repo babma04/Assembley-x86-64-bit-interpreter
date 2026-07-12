@@ -2,6 +2,8 @@ import json
 import os
 import sys
 
+from conftest import PROJECT_ROOT
+
 PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))  # folder of the current script
 
 class Storage:
@@ -57,7 +59,7 @@ class Storage:
             raise SyntaxError
 
         
-        file_path :str= os.path.join(PROJECT_DIR, file_name)
+        file_path :str= os.path.join(PROJECT_ROOT, file_name)
 
         with open(file_path, "w") as file:
             json.dump(data, file, indent=4)
@@ -81,7 +83,7 @@ class Storage:
             raise SyntaxError
 
         
-        file_path :str= os.path.join(PROJECT_DIR, file_name)
+        file_path :str= os.path.join(PROJECT_ROOT, file_name)
 
         if not os.path.isfile(file_path):
             with open(file_path, "w") as file:
@@ -118,7 +120,7 @@ class Storage:
         :return strings list: A list of strings, each representing a line in the file.
         :requires: file_name includes the .json extension && the file exists 
         """
-        file_path :str= os.path.join(PROJECT_DIR, file_name)
+        file_path :str= os.path.join(PROJECT_ROOT, file_name)
         with open(file_path, "r") as f:
             return json.load(f)
     
