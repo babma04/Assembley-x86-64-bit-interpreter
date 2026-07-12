@@ -4,8 +4,7 @@ build/
 *.o
 *.so
 tests/lib/
-tests/build/
-tests/*.o
+tests/bin/
 
 
 # Python Cache
