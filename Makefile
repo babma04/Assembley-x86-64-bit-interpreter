@@ -12,7 +12,6 @@ BUILD_DIR = build
 # Note: Your image shows the folder is named "exectution_tests" (with an extra 't').
 # Ensure this variable exactly matches the folder name in your system!
 TEST_DIR = tests/exectution_tests
-TEST_BUILD_DIR = tests/build
 TEST_BIN_DIR = tests/bin
 
 # == Targets ========
@@ -40,7 +39,6 @@ all: directories $(SHARED_LIB) $(TEST_BINS)
 directories:
 	@mkdir -p $(LIB_DIR)
 	@mkdir -p $(BUILD_DIR)
-	@mkdir -p $(TEST_BUILD_DIR)
 	@mkdir -p $(TEST_BIN_DIR)
 
 # Rule to build the shared library
@@ -65,5 +63,5 @@ test: all
 clean:
 	rm -rf $(BUILD_DIR)/* $(LIB_DIR)/*
 	@echo "Cleaned execution build and lib folders."
-	rm -rf $(TEST_BUILD_DIR)/* $(TEST_BIN_DIR)/*
-	@echo "Cleaned test build and bin folders."
+	rm -rf $(TEST_BIN_DIR)/*
+	@echo "Cleaned test bin folders."
