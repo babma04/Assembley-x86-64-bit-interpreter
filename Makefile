@@ -9,49 +9,53 @@ INC_DIR = execution/include
 LIB_DIR = lib
 BUILD_DIR = build
 
-# Note: Your image shows the folder is named "exectution_tests" (with an extra 't').
-# Ensure this variable exactly matches the folder name in your system!
 TEST_DIR = tests/exectution_tests
 TEST_BIN_DIR = tests/bin
 
-# == Targets ========
+# == Targets & Libraries ========
 
-# Name of the shared library
-SHARED_LIB = $(LIB_DIR)/libexecution.so
+# 1. Define the exact shared libraries you want to build
+LIB_OPS  = $(LIB_DIR)/liboperations.so
+LIB_MMU  = $(LIB_DIR)/libmmu.so
+LIB_REG  = $(LIB_DIR)/libreg.so
 
-# Find all .c files in src/
-SRCS = $(wildcard $(SRC_DIR)/*.c)
-# Place .o files in the build/ folder
-OBJS = $(SRCS:$(SRC_DIR)/%.c=$(BUILD_DIR)/%.o)
+SHARED_LIBS = $(LIB_OPS) $(LIB_MMU) $(LIB_REG)
 
-# Find all .c files in tests/
+# 2. Define the linker flags for the tests (matches the names above)
+TEST_LIBS = -loperations -lmmu -lreg
+
+# 3. Test files and binaries
 TEST_SRCS = $(wildcard $(TEST_DIR)/*.c)
-# Create executable targets for each test in tests/bin/
 TEST_BINS = $(TEST_SRCS:$(TEST_DIR)/%.c=$(TEST_BIN_DIR)/%)
-
 
 # == Rules ==========
 
 .PHONY: all directories clean test
 
-all: directories $(SHARED_LIB) $(TEST_BINS)
+all: directories $(SHARED_LIBS) $(TEST_BINS)
 
 directories:
 	@mkdir -p $(LIB_DIR)
 	@mkdir -p $(BUILD_DIR)
 	@mkdir -p $(TEST_BIN_DIR)
 
-# Rule to build the shared library
-$(SHARED_LIB): $(OBJS)
-	$(CC) $(LDFLAGS) -o $@ $^
-
-# Rule to compile execution .c to .o
+# Rule to compile execution .c files to .o files automatically
 $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
-# Rule to compile AND link test executables against the shared library
-$(TEST_BIN_DIR)/%: $(TEST_DIR)/%.c $(SHARED_LIB)
-	$(CC) -O3 -I./execution/include $< -o $@ -L$(LIB_DIR) -lexecution -Wl,-rpath=$$(pwd)/$(LIB_DIR)
+# Explicit rules mapping specific .o files to your custom .so names
+$(LIB_OPS): $(BUILD_DIR)/operations.o
+	$(CC) $(LDFLAGS) -o $@ $<
+
+$(LIB_MMU): $(BUILD_DIR)/memory_eng.o
+	$(CC) $(LDFLAGS) -o $@ $<
+
+$(LIB_REG): $(BUILD_DIR)/registers.o
+	$(CC) $(LDFLAGS) -o $@ $<
+
+# Rule to compile AND link test executables against the custom libraries
+$(TEST_BIN_DIR)/%: $(TEST_DIR)/%.c $(SHARED_LIBS)
+	$(CC) -O3 -I./execution/include $< -o $@ -L$(LIB_DIR) $(TEST_LIBS) -Wl,-rpath=$$(pwd)/$(LIB_DIR)
 
 test: all
 	@echo "Running tests..."
