@@ -163,7 +163,7 @@ class Segment_Mapper:
         # Pointers for lines of usable memory and address at use from a Data_memory object
         index: int = 0
         current_rip: Address = Segment_Mapper.RODATA_BASE
-        while index < len(self.memory_list):
+        while index < self.rip:
             tokens = self.memory_list[index]
 
             # Just for prevention
@@ -441,9 +441,10 @@ class Segment_Mapper:
         :param index: index to the line of code 
         :type index: int
         """
-        index: int = self.skip_to_star()
-        if index == -1:
-            print(f"NO VALID GLOBAL {self.valid_start} DECLARATION FOUND. Exiting program...")
+        try:
+            index: int = self.skip_to_star()
+        except SyntaxError as e:
+            print(e)
             sys.exit(1)
 
         self.rip = index # Set instruction pointer to the line after the start declaration
@@ -458,6 +459,7 @@ class Segment_Mapper:
         
         :return: Index of the row where start is declared
         :rtype: int
+        :raises SyntaxError: if no valid start declaration was found, if the 
         """
 
         index: int = 0
@@ -468,12 +470,18 @@ class Segment_Mapper:
             if not tokens: 
                 index += 1
                 continue
-
-            elif tokens[1].lower() == self.valid_start and self.find_start(tokens, self.memory_list[index + 1]) == -1 or self.find_start(tokens, self.memory_list[index + 1]) == 0:
-                return index + 1
-            
-            index += 1
-        return -1
+            idx :int = self.find_start(tokens, self.memory_list[index + 1])
+            match idx:
+                case 0:
+                    return index
+                case 1:
+                    return index + 1
+                case -10:
+                    raise SyntaxError(f"Invalid start declaration syntax found. Try removing extra instruction from right after {self.valid_start}!")
+                # Never reached
+                case _:
+                    index += 1
+        raise SyntaxError("No valid start declaration was found")
 
     def find_start(self, line: list[str], next_line: list[str]) -> int:
         """
@@ -483,14 +491,25 @@ class Segment_Mapper:
         :type line: list[str]
         :param next_line: List of words of the line of code following the expected start declaration
         :type next_line: list[str]
-        :return: 0 if a valid start declaration is found, 1 if no valid start declaration is found, -1 if no global declaration is found
+        :return: 0 if a valid start declaration is found, 1 if a valid start declaration was found on the next line,
+                 -1 if no global declaration is found, -2 if no valid start declaration is found and -10 if the start declaration was found but was not correct
         :rtype: int
         """
+
         if line[0] != "global":
             return -1   # Partial error (meaning no global found and possibly wrong line was passed)
-        elif (len(line) > 1 and line[1] != self.valid_start) or next_line[0] != self.valid_start + ":":
-            return 1    # Complete error (no valid start passed)
-        else: return 0
+
+        elif len(line) > 1 and line[1] == self.valid_start:
+            # Extra info on the start declaration that wont be properly parsed
+            if len(line) != 2:
+                return -10
+            return 0
+        
+        elif next_line and  next_line[0] != self.valid_start + ":":
+            return 1
+        
+        else: 
+            return -2
         
     def fetch_labels(self, index: int) -> None:
         """
