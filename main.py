@@ -6,7 +6,7 @@ from helpers.storage import Storage
 
 def main():
     """
-    Main function to initialize and run the assembly simulator.\n
+    Main function to initialize and run the assembly interpreter.\n
     Requires a file path as a command line argument or user input.
     Prompts for command line arguments after validating the file path.\n
     Author: João Carilho Louro
@@ -29,7 +29,7 @@ def main():
         argvcount: int = len(argv)
 
     loader: Segment_Mapper = Segment_Mapper(file, argvcount, argv, validation_file_name) 
-    cpu: Control_Unit = Control_Unit(loader.memory, loader, validation_file_name) 
+    cpu: Control_Unit = Control_Unit(loader, validation_file_name, is_debugging()) 
     print("DEBUG")
     cpu.run()                 
 
@@ -72,6 +72,26 @@ def get_args() -> list[str] | None:
     user_input: str = input("Enter command-line arguments separated by spaces (or press Enter for none): ")
     args: list[str] = user_input.split() if user_input.strip() else []
     return args if args else None
+
+def is_debugging():
+    """
+    Verifies if the program should be run in debugging mode.
+
+    :return: True if debug is wanted, False otherwise
+    :rtype: bool
+    """
+    debugging:int = -1
+    while debugging == -1:
+        answer:str = input("Run debugging mode? (yes/no)")
+        match answer:
+            case "yes":
+                debugging = 1
+            case "no":
+                debugging = 0
+            case _:
+                continue
+    return True if debugging == 1 else False
+
 
 if __name__ == "__main__":
     main()

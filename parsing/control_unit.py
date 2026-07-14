@@ -51,13 +51,18 @@ class Control_Unit:
     
 
 
-    def __init__(self, memory: Data_Memory, loader: Segment_Mapper, validation_file_name: str) -> None:
-        # Initialize Control Unit with memory, segment mapper, funtional units and registers (general purpose, fpu and flags)
-        self.memory: Data_Memory = memory
+    def __init__(self,loader: Segment_Mapper, validation_file_name: str, debugging:bool = False) -> None:
+        # Initialize Control Unit with memory, segment mapper, functional units and registers (general purpose, fpu and flags)
+        self.registers = loader.registers
+        self.memory: Data_Memory = loader.memory
         self.loader: Segment_Mapper = loader
-        self.data_path: Data_Path = Data_Path()
-        self.alu: ALU = ALU()
+        self.data_path: Data_Path = Data_Path(self.registers)
+        self.alu: ALU = ALU(self.registers)
         self.fpu: FPU = FPU()     
+        
+        # Turns debugging on
+        if debugging:
+            self.registers.Exch_trap_flag()
 
         # Usefull registers and flags attributes
         self.registers: Registers_Interface = Registers_Interface()

@@ -16,6 +16,11 @@ Python owns parsing and control flow. C owns the actual machine state and the ra
 During the parsing stage of the execution there is a light checkup on syntax correctness trying to match expected syntax cases, code correctness like operand count or type.
 During each interpretation execution more validation is run to make sure the current state is valid for the instruction being executed
 
+This projects offers two main interfaces:
+
+- A main.py script that run the code directly
+- A class with similar behavior as main that enables you to get the state of the program from its object before shuting down
+
 ---
 
 ## Pipeline
@@ -80,6 +85,7 @@ CPU_SIMU/
 ├── helpers/
 ├── conftest.py
 ├── Makefile
+├── interpreter.py            # programs class with similar behavior as main
 └── main.py
 ```
 

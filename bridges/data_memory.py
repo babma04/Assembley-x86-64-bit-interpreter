@@ -68,6 +68,12 @@ class Data_Memory:
         # Double check for table init
         if (not self.table):
             raise MemoryError("Failed to initialize memory table.")
+    
+    def clean(self):
+        """
+        Calls the cleaning routine from the memory_eng.c to free memory
+        """
+        self.lib.free_table(self.table)
 
     # ------------------------
     # Read and write methods
