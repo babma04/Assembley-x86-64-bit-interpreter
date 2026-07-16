@@ -217,21 +217,21 @@ class Segment_Mapper:
         :param current_rip: pointer to the Address in use to store values in the Data_memory object
         :param index: number of the line being parsed
         :param section: name of the section being parsed ('.data' or '.rodata')
-        :param is_rodata: flag indicating if the section is .rodata
         :return: updated pointer to the Address in use to store values in the Data_memory object after loading the section
         :rtype: Address
         """
+
         index += 1
-        while index < len(self.memory_list) and self.memory_list[index][0] != "section":
+        while index < len(self.memory_list) and self.memory_list[index] and self.memory_list[index][0] != "section":
             tokens: list[str] = self.memory_list[index]
             if not self.data_format_validation(tokens, index, section):
                 sys.exit(-1)
             elif "times" in tokens:
-                current_rip = self.load_timed_data(tokens, index, section, current_rip)
+                current_rip = self.load_timed_data(tokens, section, current_rip)
             elif len(tokens) >= 3:
-                current_rip = self.load_multiple_data(tokens, index, section, current_rip)
+                current_rip = self.load_multiple_data(tokens, section, current_rip)
             else:
-                current_rip = self.load_single_data(tokens, index, section, current_rip)
+                current_rip = self.load_single_data(tokens, section, current_rip)
             index += 1
             
         return current_rip
@@ -268,14 +268,12 @@ class Segment_Mapper:
                     return False
         return True
     
-    def load_timed_data(self, line: list[str], index: int, section: str, current_rip: Address) -> Address:
+    def load_timed_data(self, line: list[str], section: str, current_rip: Address) -> Address:
         """
         Loads a timed data declaration into memory.
 
         :param line: full line of code that has a .data or .rodata timed declaration
         :type line: list[str]
-        :param index: number of that line of the code
-        :type index: int
         :param section: name of the section being parsed ('.data' or '.rodata')
         :type section: str
         :param current_rip: pointer to the Address in use to store values in the Data_memory object
@@ -283,8 +281,11 @@ class Segment_Mapper:
         :return: updated pointer to the Address in use to store values in the Data_memory object
         :rtype: Address
         """
-        times: int = int(line[2])
-        number_of_bytes: int = self.SIZE_DIRECTIVES[line[3]][0]
+        # times to declare a variable data
+        times: int = int(line[4])
+        # size declaration of the variable
+        number_of_bytes: int = self.SIZE_DIRECTIVES[line[1]][0]
+        # total number of bytes to allocate
         size: int = number_of_bytes * times
         addresses: list[Address] = []
 
@@ -302,14 +303,12 @@ class Segment_Mapper:
         current_rip += size
         return current_rip  
 
-    def load_multiple_data(self, line: list[str], index: int, section: str, current_rip: Address) -> Address:
+    def load_multiple_data(self, line: list[str], section: str, current_rip: Address) -> Address:
         """
         Loads a multiple data declaration into memory.
 
         :param line: full line of code that has a .data or .rodata multiple declaration
         :type line: list[str]
-        :param index: number of that line of the code
-        :type index: int
         :param section: name of the section being parsed ('.data' or '.rodata')
         :type section: str
         :param current_rip: pointer to the Address in use to store values in the Data_memory object
@@ -337,14 +336,12 @@ class Segment_Mapper:
             current_rip += number_of_bytes
         return current_rip 
     
-    def load_single_data(self, line: list[str], index: int, section: str, current_rip: Address) -> Address:
+    def load_single_data(self, line: list[str], section: str, current_rip: Address) -> Address:
         """
         Loads a single data declaration into memory.
 
         :param line: full line of code that has a .data or .rodata single declaration
         :type line: list[str]
-        :param index: number of that line of the code
-        :type index: int
         :param section: name of the section being parsed ('.data' or '.rodata')
         :type section: str
         :param current_rip: pointer to the Address in use to store values in the Data_memory object
@@ -377,8 +374,16 @@ class Segment_Mapper:
     # ------------------------------
 
     def load_bss(self, current_rip: Address, index: int) -> Address:
+        """
+        Takes care of .bss components parsing as well as validation of the declarations format.
+
+        :param current_rip: pointer to the Address in use to store values in the Data_memory object
+        :param index: number of the line being parsed
+        :return: updated pointer to the Address in use to store values in the Data_memory object after loading the section
+        :rtype: Address
+        """
         index += 1
-        while index < len(self.memory_list) and self.memory_list[index][0] != "section":
+        while index < len(self.memory_list) and self.memory_list[index] and self.memory_list[index][0] != "section":
             tokens: list[str] = self.memory_list[index]
             if not self.bss_format_validation(tokens, index):
                 sys.exit(-2)
@@ -470,26 +475,28 @@ class Segment_Mapper:
             if not tokens: 
                 index += 1
                 continue
-            idx :int = self.find_start(tokens, self.memory_list[index + 1])
-            match idx:
-                case 0:
-                    return index
-                case 1:
-                    return index + 1
-                case -10:
-                    raise SyntaxError(f"Invalid start declaration syntax found. Try removing extra instruction from right after {self.valid_start}!")
-                # Never reached
-                case _:
-                    index += 1
+
+            if index + 1 < len(self.memory_list):
+                idx :int = self.find_start(tokens, self.memory_list[index + 1] if index + 1 < len(self.memory_list) else None)
+                match idx:
+                    case 0:
+                        return index
+                    case 1:
+                        return index + 1
+                    case -10:
+                        raise SyntaxError(f"Invalid start declaration syntax found. Try removing extra instruction from right after {self.valid_start}!")
+                    # Never reached
+                    case _:
+                        index += 1
         raise SyntaxError("No valid start declaration was found")
 
-    def find_start(self, line: list[str], next_line: list[str]) -> int:
+    def find_start(self, line: list[str], next_line: list[str] | None) -> int:
         """
         Validates the existence of a valid start declaration
 
         :param line: List of words of a line of code where a start declaration is expected
         :type line: list[str]
-        :param next_line: List of words of the line of code following the expected start declaration
+        :param next_line: List of words of the line of code following the expected start declaration or None if out of bounds
         :type next_line: list[str]
         :return: 0 if a valid start declaration is found, 1 if a valid start declaration was found on the next line,
                  -1 if no global declaration is found, -2 if no valid start declaration is found and -10 if the start declaration was found but was not correct
@@ -552,6 +559,7 @@ class Segment_Mapper:
         """
         if line[0] == "#define":
             self.load_c_constant(line, index)
+            return 
         
         elif not self.is_valid_constant_declaration(line, index):
             sys.exit(-3)
