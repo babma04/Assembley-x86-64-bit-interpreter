@@ -21,6 +21,8 @@ This projects offers two main interfaces:
 - A main.py script that run the code directly
 - A class with similar behavior as main that enables you to get the state of the program from its object before shuting down
 
+Before using please make sure your code follows the [Code format references](#code-format-and-syntax-references)
+
 ---
 
 ## Pipeline
@@ -192,8 +194,18 @@ Reading will always take a start address and a number of bytes to read. This met
 
 ### Allowed declarations
 
-All type of allowed declarations for a standard compiler for the .rodata, .data and .bss sections are allowed.
+- All type of allowed declarations for a standard compiler for the .rodata, .data and .bss sections are allowed.
 
+- Immediate/variable numerical values should be always declared using either binary, decimal or hexadecimal numeration.
+
+- "times" directive use is only allowed following a specific syntax:
+    - All "times" declarations must follow the structure:
+
+        ```asm
+        ; <label>: times <count> <size_specifier> <init_value>
+        buffer: times 10 db 0
+        ```
+        
 Constants declarations are a bit more nuanced. Allowed declarations include:
 
         - Standard declarations:

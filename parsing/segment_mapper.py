@@ -63,6 +63,7 @@ class Segment_Mapper:
         0x[\da-fA-F]+|                # Hex Prefix
         \d+[\da-fA-F]*[hH]|           # Hex Suffix
         [01]+[bB]|                    # Binary
+        0b[01]+|                      # Binary
         [a-zA-Z_]\w*|                 # Instructions / Registers / Labels
         [-+]?\d+                      # Signed Decimals
     """
@@ -185,7 +186,7 @@ class Segment_Mapper:
                 elif section_name.lstrip(".") == "text":
                     return
 
-            elif (Segment_Mapper.is_constant(tokens)):
+            elif (Segment_Mapper.is_constant_declaration(tokens)):
                 self.load_constant(tokens, index)
             index += 1
 
@@ -228,7 +229,7 @@ class Segment_Mapper:
                 sys.exit(-1)
             elif "times" in tokens:
                 current_rip = self.load_timed_data(tokens, section, current_rip)
-            elif len(tokens) >= 3:
+            elif len(tokens) > 3:
                 current_rip = self.load_multiple_data(tokens, section, current_rip)
             else:
                 current_rip = self.load_single_data(tokens, section, current_rip)
@@ -249,24 +250,60 @@ class Segment_Mapper:
         :return: True if the line is a valid .data or .rodata declaration, False otherwise
         :rtype: bool
         """
-        if "times" in line and (len(line) != 5 or line[3] != "times" or not re.match(r'^\d+$', line[4]) or not re.match(r'^\d+$', line[2])) or "times" not in line and len(line) < 3:
-            print(f"INVALID {section.upper()} DECLARATION AT LINE {index}. Exiting program on a SyntaxError...")
+
+        if not line:
             return False
-        elif (Segment_Mapper.exists_in_section(line[0].strip(":"), self.rodata_segment) or Segment_Mapper.exists_in_section(line[0], self.data_segment) or Segment_Mapper.exists_in_section(line[0], self.bss_segment)):
-            print(f"Variable {line[0]} already declared. Exiting program on a SyntaxError...")
+        label: str = line[0].rstrip(":")
+        # Check label duplication
+        if (Segment_Mapper.exists_in_section(label, self.rodata_segment) or Segment_Mapper.exists_in_section(label, self.data_segment) or Segment_Mapper.exists_in_section(label, self.bss_segment)):
+            print(f"Variable {label} already declared. Exiting program on a SyntaxError...")
             return False
-        elif not Segment_Mapper.valid_variable_name(line[0]):
-            print(f"INVALID VARIABLE NAME {line[0]} AT LINE {index}. Exiting program on a SyntaxError...")
+
+        # Validates labels name
+        elif not Segment_Mapper.valid_variable_name(label):
+            print(f"INVALID VARIABLE NAME {label} AT LINE {index}. Exiting program on a SyntaxError...")
             return False
-        elif not Segment_Mapper.valid_size_specifier(line[1], section.lstrip("."), index):
+        
+        # "times" declaration validation
+        if "times" in line and not self.timed_data_validation(line, section, "times"):
+            print(f"UNSUPPORTED OR INCORRECT 'TIMES' {section.upper()} DECLARATION AT LINE {index}. Exiting program on a SyntaxError...")
+            return False
+
+        # Standard declaration validation
+        elif len(line) < 3:
+                print(f"INVALID {section.upper()} DECLARATION AT LINE {index}.\nNot all required elements declared. Exiting program on a SyntaxError...")
+                return False
+        
+        elif not Segment_Mapper.valid_size_specifier(line[1], section.lstrip(".")):
             print(f"INVALID {section.upper()} SIZE SPECIFIER AT LINE {index}. Exiting program on a SyntaxError...")
             return False
-        elif "times" not in line and len(line) >= 3:
-            for value in line[2:]:
-                if not re.match(r'^\d+$', value):
-                    print(f"INVALID {section.upper()} VALUE DECLARATION AT LINE {index}. Exiting program on a SyntaxError...")
-                    return False
+        
+            # 5. Fast value checks
+        if not all(self.is_numeric(val) for val in line[2:]):
+            print(f"INVALID {section.upper()} VALUE DECLARATION AT LINE {index}.")
+            return False
         return True
+
+    def timed_data_validation(self, line: list[str], section: str, TIMES_KEY: str) -> bool:
+        """
+        Validates declarations using the 'times' keyword.\n
+        Declarations must follow the pattern <label>: times <count> <size_specifier> <init_value>\n
+
+        :param line: full line of code that has a .data or .rodata declaration
+        :type line: list[str]
+        :param section: name of the section being parsed ('.data' or '.rodata')
+        :type section: str
+        :param TIMES_KEY: 'times' keyword for faster memory accesses
+        :type TIMES_KEY: str
+        :return: True if the declaration follows the desired pattern, False otherwise
+        :rtype: bool
+        """
+        match line:
+            case [_, "times", count, size_spec, val] if (self.is_numeric(count) or self.is_constant(count)) and (self.is_valid_value(val) or self.is_constant(val)):
+                return self.valid_size_specifier(size_spec, section)
+            case _:
+                return False
+
     
     def load_timed_data(self, line: list[str], section: str, current_rip: Address) -> Address:
         """
@@ -282,9 +319,9 @@ class Segment_Mapper:
         :rtype: Address
         """
         # times to declare a variable data
-        times: int = int(line[4])
+        times: int = int(line[2])
         # size declaration of the variable
-        number_of_bytes: int = self.SIZE_DIRECTIVES[line[1]][0]
+        number_of_bytes: int = self.SIZE_DIRECTIVES[line[2]][0]
         # total number of bytes to allocate
         size: int = number_of_bytes * times
         addresses: list[Address] = []
@@ -424,7 +461,7 @@ class Segment_Mapper:
         elif not Segment_Mapper.valid_variable_name(line[0]):
             print(f"INVALID VARIABLE NAME {line[0]} AT LINE {index}. Exiting program on a SyntaxError...")
             return False
-        elif not Segment_Mapper.valid_size_specifier(line[1], "bss", index):
+        elif not Segment_Mapper.valid_size_specifier(line[1], "bss"):
             print(f"INVALID BSS SIZE SPECIFIER AT LINE {index}. Exiting program on a SyntaxError...")
             return False 
         elif not re.match(r'^\d+$', line[2]):
@@ -452,7 +489,7 @@ class Segment_Mapper:
             print(e)
             sys.exit(1)
 
-        self.rip = index # Set instruction pointer to the line after the start declaration
+        self.rip = index + 1 # Set instruction pointer to the line after the start declaration
         self.fetch_labels(index)
         # Exit validation is verified while running
 
@@ -480,8 +517,10 @@ class Segment_Mapper:
                 idx :int = self.find_start(tokens, self.memory_list[index + 1] if index + 1 < len(self.memory_list) else None)
                 match idx:
                     case 0:
+                        self.labels[self.valid_start] = index
                         return index
                     case 1:
+                        self.labels[self.valid_start] = index + 1
                         return index + 1
                     case -10:
                         raise SyntaxError(f"Invalid start declaration syntax found. Try removing extra instruction from right after {self.valid_start}!")
@@ -517,7 +556,7 @@ class Segment_Mapper:
         
         else: 
             return -2
-        
+    
     def fetch_labels(self, index: int) -> None:
         """
         Takes care of the label initialization with all labels present in the code passed to the execution.\n
@@ -529,7 +568,7 @@ class Segment_Mapper:
 
         while index < len(self.memory_list):
             line: list[str] = self.memory_list[index]
-            if (Segment_Mapper.is_constant(line)):
+            if (Segment_Mapper.is_constant_declaration(line)):
                 self.load_constant(line, index)
                 index += 1
                 continue
@@ -606,6 +645,19 @@ class Segment_Mapper:
         self.constants[line[1]]['value'] = value    # Only values not passed as bytes
 
     
+    def is_constant(self, label: str) -> bool:
+        """
+        Verifies if a given label is a constant already declared
+
+        :param label: label to verify if is a label
+        :type label: str
+        :return: True if label is a constant, False otherwise
+        :rtype: bool
+        """
+        if label in self.constants:
+            return True
+        return False
+
     def is_valid_constant_declaration(self, line: list[str], index: int) -> bool:
         """
         Verifies if a constant declaration is valid.
@@ -643,9 +695,9 @@ class Segment_Mapper:
             return False
         return True
     
-    # ------------------------
+    # ---------------------------
     # Constant definition parser
-    # ------------------------
+    # ---------------------------
 
     def valid_size_calculation(self, line: list[str], index: int) -> bool:
         """
@@ -744,7 +796,6 @@ class Segment_Mapper:
         memory.push(argvcount.to_bytes(8, "little"))
         # Step 4: align the stack and verify its size
         self.align_stack(memory, stack_limit)
-        self.check_stack_limit(self.registers.read_reg("rsp"), stack_limit)
         
 
     def push_arguments(self, argv: list[str]) -> list[int]:
@@ -759,11 +810,9 @@ class Segment_Mapper:
         """
         addresses :list[int] = []
         for arg in reversed(argv):
-            arg_bytes = arg.encode('utf-8') + b'\x00'
-
-            for char in reversed(arg_bytes):
-                single_byte: bytes = bytes([char])
-                self.memory.push(single_byte)
+            # Reverses arg_bytes to give the correct push order
+            arg_bytes = (arg.encode('utf-8') + b'\x00')[::-1]
+            self.memory.push(arg_bytes)
             addresses.append(self.registers.read_reg("rsp"))
         self.memory.push(b"\x00")
         return addresses
@@ -811,7 +860,7 @@ class Segment_Mapper:
     # -----------------------
 
     @staticmethod
-    def is_constant(line: list[str]) -> bool:
+    def is_constant_declaration(line: list[str]) -> bool:
         """
         Verifies if a given line declares a constant
 
@@ -852,7 +901,7 @@ class Segment_Mapper:
         return variable in section
     
     @staticmethod
-    def valid_size_specifier(specifier: str, section: str, index: int) -> bool:
+    def valid_size_specifier(specifier: str, section: str) -> bool:
         """
         Validates if a size specifier is valid for a given section.
 
@@ -860,8 +909,6 @@ class Segment_Mapper:
         :type specifier: str
         :param section: section name where the size specifier is used
         :type section: str
-        :param index: number of that line of the code
-        :type index: int
         :return: True if the size specifier is valid, False otherwise
         :rtype: bool
         """
@@ -889,12 +936,13 @@ class Segment_Mapper:
         :param value: initial value to write into the section
         :type value: int | str
         """
-        if isinstance(value, str):
-            encoded_value: bytes = (value.encode())[:specifier].ljust(specifier, b'\x00')
+        byte_value: bytes
+        try:
+            byte_value = int(value).to_bytes(specifier, "little")
             for i in range(times):
-                memory.write_bytes(current_rip + i*specifier, encoded_value, specifier)
-        else:
-            byte_value: bytes = value.to_bytes(specifier, "little")
+                memory.write_bytes(current_rip + i*specifier, byte_value, specifier)
+        except ValueError:
+            byte_value = (str(value).encode())[:specifier].ljust(specifier, b'\x00')
             for i in range(times):
                 memory.write_bytes(current_rip + i*specifier, byte_value, specifier)
 
@@ -914,3 +962,42 @@ class Segment_Mapper:
         if not re.match(r'^[A-Za-z_][A-Za-z0-9_]*$', name.strip(":")):
             return False
         return True
+
+    @staticmethod
+    def is_numeric(s: str) -> bool:
+        """
+        Helper that verifies if a given str is a numerical value
+
+        :param s: String to check the condition
+        :type s: str
+        :return: True if s is a numerical value, False otherwise
+        :rtype: bool
+        """
+        try:
+            if s.lower().startswith('0x'):
+                int(s, 16)
+            else:
+                int(s)
+            return True
+        except ValueError:
+            return False
+        
+    @staticmethod
+    def is_valid_value(val: str) -> bool:
+        """
+        Helper that verifies if a given value to be used in initialization of a variable is valid
+
+        :param s: String to check the condition
+        :type s: str
+        :return: True if s is a numerical value, False otherwise
+        :rtype: bool
+        """
+        if Segment_Mapper.is_numeric(val):
+            return True
+        
+        # Check for char/string constants
+        if (len(val) >= 3 and 
+            (val.startswith("'") and val.endswith("'")) or 
+            (val.startswith('"') and val.endswith('"'))):
+            return True
+        return False
