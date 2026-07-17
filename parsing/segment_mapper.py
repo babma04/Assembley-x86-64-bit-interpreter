@@ -254,6 +254,7 @@ class Segment_Mapper:
         if not line:
             return False
         label: str = line[0].rstrip(":")
+        
         # Check label duplication
         if (Segment_Mapper.exists_in_section(label, self.rodata_segment) or Segment_Mapper.exists_in_section(label, self.data_segment) or Segment_Mapper.exists_in_section(label, self.bss_segment)):
             print(f"Variable {label} already declared. Exiting program on a SyntaxError...")
@@ -265,9 +266,11 @@ class Segment_Mapper:
             return False
         
         # "times" declaration validation
-        if "times" in line and not self.timed_data_validation(line, section, "times"):
-            print(f"UNSUPPORTED OR INCORRECT 'TIMES' {section.upper()} DECLARATION AT LINE {index}. Exiting program on a SyntaxError...")
-            return False
+        if "times" in line:
+            if not self.timed_data_validation(line, section, "times"):
+                print(f"UNSUPPORTED OR INCORRECT 'TIMES' {section.upper()} DECLARATION AT LINE {index}. Exiting program on a SyntaxError...")
+                return False
+            return True
 
         # Standard declaration validation
         elif len(line) < 3:
@@ -279,7 +282,7 @@ class Segment_Mapper:
             return False
         
             # 5. Fast value checks
-        if not all(self.is_numeric(val) for val in line[2:]):
+        if not all(self.is_valid_value(val) for val in line[2:]):
             print(f"INVALID {section.upper()} VALUE DECLARATION AT LINE {index}.")
             return False
         return True
@@ -303,7 +306,6 @@ class Segment_Mapper:
                 return self.valid_size_specifier(size_spec, section)
             case _:
                 return False
-
     
     def load_timed_data(self, line: list[str], section: str, current_rip: Address) -> Address:
         """
@@ -321,7 +323,7 @@ class Segment_Mapper:
         # times to declare a variable data
         times: int = int(line[2])
         # size declaration of the variable
-        number_of_bytes: int = self.SIZE_DIRECTIVES[line[2]][0]
+        number_of_bytes: int = self.SIZE_DIRECTIVES[line[3]][0]
         # total number of bytes to allocate
         size: int = number_of_bytes * times
         addresses: list[Address] = []
@@ -756,6 +758,7 @@ class Segment_Mapper:
         else:
             raise ValueError(f"INVALID CONSTANT DECLARATION AT LINE {index}. Exiting program on a SyntaxError...")
 
+
     # --------------------
     # STACK INITIALIZATION
     # --------------------
@@ -855,9 +858,9 @@ class Segment_Mapper:
             )
 
 
-    # -----------------------
-    # STATIC HELPERS (might be moved onto a different file)
-    # -----------------------
+    # ----------------
+    # STATIC HELPERS 
+    # ----------------
 
     @staticmethod
     def is_constant_declaration(line: list[str]) -> bool:
@@ -996,8 +999,8 @@ class Segment_Mapper:
             return True
         
         # Check for char/string constants
-        if (len(val) >= 3 and 
-            (val.startswith("'") and val.endswith("'")) or 
+        if len(val) >= 3 and (
+            (val.startswith("'") and val.endswith("'")) or
             (val.startswith('"') and val.endswith('"'))):
             return True
         return False
