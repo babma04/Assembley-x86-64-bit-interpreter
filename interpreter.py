@@ -42,7 +42,6 @@ class Interpreter_x86:
         # State could be offered here
 
     def exit(self):
-        # To implement on each class
         self.register.clean()
         self.memory.clean()
     

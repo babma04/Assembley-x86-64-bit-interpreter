@@ -109,6 +109,16 @@ class Registers_Interface:
         # Done last, now that CPURegs_create.restype is correctly configured.
         self.regs = self.lib.CPURegs_create()
 
+    # ------------------
+    # Register cleaning
+    # ------------------
+
+    def clean(self) -> None:
+        """
+        Cleans the register structure from memory
+        """
+        self.lib.CPURegs_free(self.regs)
+
     #------------------
     # Register Writing
     #------------------
