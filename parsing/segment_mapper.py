@@ -3,6 +3,7 @@ from helpers.storage import Storage
 from bridges.data_memory import Data_Memory
 from bridges.register_manager import Registers_Interface
 from helpers.my_types import DataSectionInfo, BssSectionInfo, LabelMap, ConstantMap, Address
+from exit_codes import ExitCode
 import re
 
 class Segment_Mapper:
@@ -256,7 +257,7 @@ class Segment_Mapper:
         label: str = line[0].rstrip(":")
         
         # Check label duplication
-        if (Segment_Mapper.exists_in_section(label, self.rodata_segment) or Segment_Mapper.exists_in_section(label, self.data_segment) or Segment_Mapper.exists_in_section(label, self.bss_segment)):
+        if self._label_in_use(label):
             print(f"Variable {label} already declared. Exiting program on a SyntaxError...")
             return False
 
@@ -306,7 +307,7 @@ class Segment_Mapper:
                 return self.valid_size_specifier(size_spec, section)
             case _:
                 return False
-    
+
     def load_timed_data(self, line: list[str], section: str, current_rip: Address) -> Address:
         """
         Loads a timed data declaration into memory.
@@ -326,21 +327,12 @@ class Segment_Mapper:
         number_of_bytes: int = self.SIZE_DIRECTIVES[line[3]][0]
         # total number of bytes to allocate
         size: int = number_of_bytes * times
-        addresses: list[Address] = []
 
-        if section == "data":
-            self.data_segment[line[0]] = {'size': size, 'addresses': []}
-            for i in range(size):
-                addresses.append(current_rip + i)
-            self.data_segment[line[0]]['addresses'] = addresses
-        else:
-            self.rodata_segment[line[0]] = {'size': size, 'addresses': []}
-            for i in range(size):
-                addresses.append(current_rip + i)
-            self.rodata_segment[line[0]]['addresses'] = addresses
+        addresses: list[Address] = self._define_segment(section, line[0], size, current_rip)
+
         Segment_Mapper.write_section_to_memory(self.memory, times, number_of_bytes, addresses, current_rip, value=line[4])
         current_rip += size
-        return current_rip  
+        return current_rip
 
     def load_multiple_data(self, line: list[str], section: str, current_rip: Address) -> Address:
         """
@@ -357,23 +349,13 @@ class Segment_Mapper:
         """
         number_of_bytes: int = self.SIZE_DIRECTIVES[line[1]][0]
         size: int = number_of_bytes * (len(line) - 2)
-        addresses: list[Address] = []
-
-        if section == "data":
-            self.data_segment[line[0]] = {'size': size, 'addresses': []}
-            for i in range(size):
-                addresses.append(current_rip + i)
-            self.data_segment[line[0]]['addresses'] = addresses
-        else:
-            self.rodata_segment[line[0]] = {'size': size, 'addresses': []}
-            for i in range(size):
-                addresses.append(current_rip + i)
-            self.rodata_segment[line[0]]['addresses'] = addresses
+        # Initializes the new entry on the correct section
+        self._define_segment(section, line[0], size, current_rip)
 
         for i in range(2, len(line)):
             Segment_Mapper.write_section_to_memory(self.memory, 1, number_of_bytes, [current_rip], current_rip, value=line[i])
             current_rip += number_of_bytes
-        return current_rip 
+        return current_rip
     
     def load_single_data(self, line: list[str], section: str, current_rip: Address) -> Address:
         """
@@ -390,18 +372,7 @@ class Segment_Mapper:
         """
         number_of_bytes: int = self.SIZE_DIRECTIVES[line[1]][0]
         size: int = number_of_bytes
-        addresses: list[Address] = []
-
-        if section == "data":
-            self.data_segment[line[0]] = {'size': size, 'addresses': []}
-            for i in range(size):
-                addresses.append(current_rip + i)
-            self.data_segment[line[0]]['addresses'] = addresses
-        else:
-            self.rodata_segment[line[0]] = {'size': size, 'addresses': []}
-            for i in range(size):
-                addresses.append(current_rip + i)
-            self.rodata_segment[line[0]]['addresses'] = addresses
+        addresses: list[Address] = self._define_segment(section, line[0], size, current_rip)
 
         Segment_Mapper.write_section_to_memory(self.memory, 1, number_of_bytes, addresses, current_rip, value=line[2])
         current_rip += size
@@ -453,21 +424,31 @@ class Segment_Mapper:
         :return: True if the line is a valid .bss declaration, False otherwise
         :rtype: bool
         """
+        label: str = line[0]
 
+        # Check label duplication
+        if self._label_in_use(label):
+            print(f"Variable {label} already declared. Exiting program on a SyntaxError...")
+            return False
+
+        # Validates labels name
+        elif not Segment_Mapper.valid_variable_name(label):
+            print(f"INVALID VARIABLE NAME {label} AT LINE {index}. Exiting program on a SyntaxError...")
+            return False
+        
+        # Checks correct number of components declared
         if len(line) != 3:
             print(f"INVALID BSS DECLARATION AT LINE {index}. Exiting program on a SyntaxError...")
             return False
-        elif (Segment_Mapper.exists_in_section(line[0].strip(":"), self.rodata_segment) or Segment_Mapper.exists_in_section(line[0], self.data_segment) or Segment_Mapper.exists_in_section(line[0], self.bss_segment)):
-            print(f"Variable {line[0]} already declared. Exiting program on a SyntaxError...")
-            return False
-        elif not Segment_Mapper.valid_variable_name(line[0]):
-            print(f"INVALID VARIABLE NAME {line[0]} AT LINE {index}. Exiting program on a SyntaxError...")
-            return False
+        
+        # Validates size specifier
         elif not Segment_Mapper.valid_size_specifier(line[1], "bss"):
             print(f"INVALID BSS SIZE SPECIFIER AT LINE {index}. Exiting program on a SyntaxError...")
             return False 
-        elif not re.match(r'^\d+$', line[2]):
-            print(f"INVALID BSS SIZE DECLARATION AT LINE {index}. Exiting program on a SyntaxError...")
+        
+        # Validates values declared
+        elif not self.is_valid_value(line[2]):
+            print(f"INVALID BSS VALUE DECLARED AT LINE {index}. Exiting program on a SyntaxError...")
             return False
         return True      
         
@@ -601,20 +582,18 @@ class Segment_Mapper:
         if line[0] == "#define":
             self.load_c_constant(line, index)
             return 
-        
         elif not self.is_valid_constant_declaration(line, index):
             sys.exit(-3)
-        self.constants[line[0]]['line'] = index
+
+        # Value getting
+        value: int | str
         if Segment_Mapper.has_size_calculation(line):
-            variable: str = line[len(line)-1]
-            value: int | str = self.get_size_constant_value(variable, index, line[0])
+            variable: str = line[2]
+            value = self.get_size_constant_value(variable, index, line[0])
         else:
-            try:
-                value: int | str = self.get_constant_value(line[2], index)
-            except ValueError as e:
-                print(e)
-                sys.exit(-3)
-        self.constants[line[0]]['value'] = value    # Only values not passed as bytes
+            value = self.get_constant_value(line[2])
+
+        self.constants[line[1]] = {'line': index, 'value': value}
 
     # ------------------------
     # Constant validation
@@ -629,23 +608,16 @@ class Segment_Mapper:
         :param index: number of that line of the code
         :type index: int
         """
-        if len(line) < 3:
+        if not self.common_constant_declaration_validation(line, line[1], index):
+            sys.exit(-3)
+        elif not self.is_valid_value(line[2]):
             print(f"INVALID CONSTANT DECLARATION AT LINE {index}. Exiting program on a SyntaxError...")
             sys.exit(-3)
-        elif Segment_Mapper.exists_in_section(line[1], self.data_segment) or Segment_Mapper.exists_in_section(line[1], self.rodata_segment) or Segment_Mapper.exists_in_section(line[1], self.bss_segment) or Segment_Mapper.exists_in_section(line[1], self.constants):
-            print(f"INVALID CONSTANT DECLARATION AT LINE {index}. Label {line[1]} already in use. Exiting program on a SyntaxError...")
-            sys.exit(-3)
-        elif not Segment_Mapper.valid_variable_name(line[1]):
-            print(f"INVALID CONSTANT NAME {line[1]} AT LINE {index}. Exiting program on a SyntaxError...")
-            sys.exit(-3)
-        self.constants[line[1]] = {'line': index, 'value': ""}
-        try:
-            value: int | str = self.get_constant_value(line[2], index)
-        except ValueError as e:
-            print(e)
-            sys.exit(-3)
-        self.constants[line[1]]['value'] = value    # Only values not passed as bytes
+        self.constants[line[1]] = {'line': index, 'value': self.get_constant_value(line[2])}
 
+    # -----------------------------
+    # Constant (format) validation
+    # -----------------------------
     
     def is_constant(self, label: str) -> bool:
         """
@@ -660,9 +632,37 @@ class Segment_Mapper:
             return True
         return False
 
+    def common_constant_declaration_validation(self, line: list[str], label: str, index: int) -> bool:
+        """
+        Validates common conditions between c constants and standard constants
+
+        :param line: full line of code that has a constant declaration
+        :type line: list[str]
+        :param label: name of the constant being declared
+        :type label: str
+        :param index: number of that line of the code
+        :type index: int
+        :return: True if all conditions pass, False otherwise
+        :rtype: bool
+        """
+        if len(line) != 3: 
+            print(f"INVALID CONSTANT DECLARATION AT LINE {index}. Exiting program on a SyntaxError...")
+            return False
+
+        # Label validation
+        elif self._label_in_use(label, include_constants=True):
+            print(f"INVALID CONSTANT DECLARATION AT LINE {index}. Label {line[0]} already in use. Exiting program on a SyntaxError...")
+            return False
+        
+        elif not Segment_Mapper.valid_variable_name(line[0]):
+            print(f"INVALID CONSTANT NAME {label} AT LINE {index}. Exiting program on a SyntaxError...")
+            return False
+        return True
+
+
     def is_valid_constant_declaration(self, line: list[str], index: int) -> bool:
         """
-        Verifies if a constant declaration is valid.
+        Verifies if a standard constant declaration is valid.
         
         :param line: full line of code that has a constant declaration
         :type line: list[str]
@@ -675,32 +675,23 @@ class Segment_Mapper:
             # <label> equ/EQU <value>
             # <label> equ/EQU $-<data/rodata label>     # it's important to not leave spaces between $ and -
         
-        if len(line) < 3 or line[1] != "equ" and line[1] != "EQU":
+        if not self.common_constant_declaration_validation(line, line[0], index):
+            return False
+
+        # Basic format checking
+        elif line[1].lower() != "equ":
             print(f"INVALID CONSTANT DECLARATION AT LINE {index}. Exiting program on a SyntaxError...")
-            return False
-        
-        elif len(line) > 3:
-            print(f"INVALID CONSTANT DECLARATION AT LINE {index}.\n Please dont leave extra spaces between components. Size declarations should not have spaces between '$', '-' and the label.\n Exiting program on a SyntaxError...")
-            return False
-        
-        elif Segment_Mapper.exists_in_section(line[0], self.data_segment) or Segment_Mapper.exists_in_section(line[0], self.rodata_segment) or Segment_Mapper.exists_in_section(line[0], self.bss_segment) or Segment_Mapper.exists_in_section(line[0], self.constants):
-            print(f"INVALID CONSTANT DECLARATION AT LINE {index}. Label {line[0]} already in use. Exiting program on a SyntaxError...")
-            return False
-        elif not Segment_Mapper.valid_variable_name(line[0]):
-            print(f"INVALID CONSTANT NAME {line[0]} AT LINE {index}. Exiting program on a SyntaxError...")
             return False
         
         elif Segment_Mapper.has_size_calculation(line) and not self.valid_size_calculation(line, index):
             return False
-        elif not re.match(fr'^{Segment_Mapper.IMMEDIATE_VALUE_PATTERN}$', line[2]) and not Segment_Mapper.has_size_calculation(line):
+        
+        # value verification
+        elif not self.is_valid_value(line[2]) and not Segment_Mapper.has_size_calculation(line):
             print(f"INVALID CONSTANT DECLARATION AT LINE {index}. Exiting program on a SyntaxError...")
             return False
         return True
     
-    # ---------------------------
-    # Constant definition parser
-    # ---------------------------
-
     def valid_size_calculation(self, line: list[str], index: int) -> bool:
         """
         Verifies that the size calculation is valid.
@@ -715,11 +706,16 @@ class Segment_Mapper:
         if not re.match(r'^\$-\w+$', line[2]):
             print(f"INVALID CONSTANT DECLARATION AT LINE {index}. Exiting program on a SyntaxError...")
             return False
+        
         label = line[2][2:]  # Extract label after '$-'
         if not (Segment_Mapper.exists_in_section(label, self.data_segment) or Segment_Mapper.exists_in_section(label, self.rodata_segment)):
             print(f"Invalid label used in {line[0]} declaration at line {index}. {label} is not a usable label. Exiting program on a SyntaxError...\n")
             return False
-        return True        
+        return True  
+    
+    # ----------------------------
+    # Constant definition getters
+    # ----------------------------     
                 
 
     def get_size_constant_value(self, variable: str, index: int, label: str) -> int | str:
@@ -741,7 +737,7 @@ class Segment_Mapper:
         return int(self.rodata_segment[variable]['size'])    # type: ignore  (is always int)
     
 
-    def get_constant_value(self, value: str, index: int) -> int | str:
+    def get_constant_value(self, value: str) -> int | str:
         """
         Gets the value of a constant that is not declared using a size calculation of a string.
         
@@ -749,14 +745,15 @@ class Segment_Mapper:
         :type value: str
         :return: value of the constant (int or str)
         :rtype: int | str
-        :raises ValueError: If an invalid constant declaration is detected
         """
-        if re.match(r'^\d+$', value):
-            return int(value)
-        elif re.match(r"^'.'$", value, re.DOTALL) or re.match(r'^".*"$', value):
-            return value[1:-1]   # Remove quotes
-        else:
-            raise ValueError(f"INVALID CONSTANT DECLARATION AT LINE {index}. Exiting program on a SyntaxError...")
+        try:
+            # if is int will pass
+            val: int = int(value)
+            return val
+        except ValueError:      # triggered if not int
+            # removes quotation marks and returns
+            return value[1:-1]
+            
 
 
     # --------------------
@@ -857,6 +854,40 @@ class Segment_Mapper:
                 f"below minimum allowed {hex(stack_limit)}"
             )
 
+    # ----------------
+    # Helper methods
+    # ----------------
+
+    def _define_segment(self, section: str, label: str, size: int, current_rip: Address) -> list[Address]:
+        """
+        Handles entry creation on the correct segment handler matching the section inputted an
+        """
+        addresses = list(range(current_rip, current_rip + size))
+        segment = self.data_segment if section == "data" else self.rodata_segment
+        segment[label] = {'size': size, 'addresses': addresses}
+        return addresses
+    
+    def _label_in_use(self, label: str, include_constants: bool = False) -> bool:
+        """
+        Checks whether a label is already declared in any memory segment
+        (.data, .rodata, .bss), optionally also checking constants.
+
+        :param label: label to check for existing declarations
+        :type label: str
+        :param include_constants: whether to also check the constants map
+        :type include_constants: bool
+        :return: True if the label is already in use, False otherwise
+        :rtype: bool
+        """
+        in_use = (
+            Segment_Mapper.exists_in_section(label, self.data_segment) or
+            Segment_Mapper.exists_in_section(label, self.rodata_segment) or
+            Segment_Mapper.exists_in_section(label, self.bss_segment)
+        )
+        if include_constants:
+            in_use = in_use or Segment_Mapper.exists_in_section(label, self.constants)
+        return in_use
+
 
     # ----------------
     # STATIC HELPERS 
@@ -915,11 +946,10 @@ class Segment_Mapper:
         :return: True if the size specifier is valid, False otherwise
         :rtype: bool
         """
-        if specifier not in ['resb', 'resw', 'resd', 'resq'] and section == "bss":
+        if specifier not in Segment_Mapper.SIZE_DIRECTIVES:
             return False
-        elif specifier not in ['db', 'dw', 'dd', 'dq'] and section in ["data", "rodata"]:
-            return False
-        return True
+        is_initialized = Segment_Mapper.SIZE_DIRECTIVES[specifier][1]
+        return is_initialized if section in ("data", "rodata") else not is_initialized
     
     @staticmethod
     def write_section_to_memory(memory: Data_Memory, times: int, specifier: int, addresses: list[Address], current_rip: Address, value: int | str=0) -> None:
