@@ -625,7 +625,7 @@ class Control_Unit:
         labels: list[str] = []
         found_labels: list[str] = re.findall(self.CONSTANTS_AND_LABELS_PATTERN, expressions)
         for item in found_labels:
-            if not (Segment_Mapper.exists_in_section(item, self.data_section) or Segment_Mapper.exists_in_section(item, self.rodata_section) or Segment_Mapper.exists_in_section(item, self.bss_section)):
+            if not (Segment_Mapper._exists_in_section(item, self.data_section) or Segment_Mapper._exists_in_section(item, self.rodata_section) or Segment_Mapper._exists_in_section(item, self.bss_section)):
                     return ['Invalid']
             else:
                 labels.append(item)
@@ -641,11 +641,11 @@ class Control_Unit:
         :rtype: int
         :raises ValueError: If the label is not found in any section
         """
-        if Segment_Mapper.exists_in_section(label, self.data_section):
+        if Segment_Mapper._exists_in_section(label, self.data_section):
             return self.data_section[label]['size'] # type: ignore  
-        elif Segment_Mapper.exists_in_section(label, self.rodata_section):
+        elif Segment_Mapper._exists_in_section(label, self.rodata_section):
             return self.rodata_section[label]['size']   # type: ignore
-        elif Segment_Mapper.exists_in_section(label, self.bss_section):
+        elif Segment_Mapper._exists_in_section(label, self.bss_section):
             return self.bss_section[label]['size']  # type: ignore
         else:
             raise ValueError(f"LABEL {label} NOT FOUND IN ANY SECTION DURING SIZE RETRIEVAL AT LINE {self.rip}!")       # should not happen
@@ -661,9 +661,9 @@ class Control_Unit:
         """
         # Return types are ignored because the return type of each section is specific and mask for int values
 
-        if Segment_Mapper.exists_in_section(label, self.rodata_section):
+        if Segment_Mapper._exists_in_section(label, self.rodata_section):
             return self.rodata_section[label]['addresses'][0]   #type: ignore 
-        elif Segment_Mapper.exists_in_section(label, self.data_section):
+        elif Segment_Mapper._exists_in_section(label, self.data_section):
             return self.data_section[label]['addresses'][0]     #type: ignore
         else:
             return self.bss_section[label]['addresses'][0]      #type: ignore
@@ -796,7 +796,7 @@ class Control_Unit:
             return False
         # Assuming it is an address, tries to match the components valid in an address declaration declaration and verify if they are valid
         elif re.match(fr'^{self.CONSTANTS_AND_LABELS_PATTERN}$', expression):
-            if not (Segment_Mapper.exists_in_section(expression, self.data_section) or Segment_Mapper.exists_in_section(expression, self.rodata_section) or Segment_Mapper.exists_in_section(expression, self.bss_section)):
+            if not (Segment_Mapper._exists_in_section(expression, self.data_section) or Segment_Mapper._exists_in_section(expression, self.rodata_section) or Segment_Mapper._exists_in_section(expression, self.bss_section)):
                 raise ValueError(f"INVALID LABEL {expression} AT LINE {self.rip}!")
             else:
                 return True
@@ -912,13 +912,13 @@ class Control_Unit:
                 ### NOT CURRENTLY ACTIVE
                 pass
             elif re.match(self.CONSTANTS_AND_LABELS_PATTERN, element):
-                if Segment_Mapper.exists_in_section(element, self.data_section) or Segment_Mapper.exists_in_section(element, self.rodata_section) or Segment_Mapper.exists_in_section(element, self.bss_section):
+                if Segment_Mapper._exists_in_section(element, self.data_section) or Segment_Mapper._exists_in_section(element, self.rodata_section) or Segment_Mapper._exists_in_section(element, self.bss_section):
                     try:
                         label_address: str = str(self.get_label_address(element))
                         ret.append(label_address)
                     except ValueError as e:
                         raise ValueError(e)
-                elif Segment_Mapper.exists_in_section(element, self.constants):
+                elif Segment_Mapper._exists_in_section(element, self.constants):
                     if not self.is_valid_line_for_constant(int(self.constants[element]['line'])):
                         raise ValueError(f"Constant {element} is not yet defined")
                     constant_value: str = str(self.get_encoded_value(self.constants[element]['value']))
