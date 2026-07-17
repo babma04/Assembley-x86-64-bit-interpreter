@@ -42,9 +42,11 @@ class Interpreter_x86:
         # State could be offered here
 
     def exit(self):
+        """
+        Finishes the interaction state of the interpreter and cleans all manually allocated memory 
+        """
         self.register.clean()
         self.memory.clean()
-    
 
     
     # ------------------
