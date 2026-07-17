@@ -227,7 +227,7 @@ class Segment_Mapper:
         while index < len(self.memory_list) and self.memory_list[index] and self.memory_list[index][0] != "section":
             tokens: list[str] = self.memory_list[index]
             if not self.data_format_validation(tokens, index, section):
-                sys.exit(-1)
+                sys.exit(ExitCode.DATA_FORMAT_ERROR)
             elif "times" in tokens:
                 current_rip = self.load_timed_data(tokens, section, current_rip)
             elif len(tokens) > 3:
@@ -396,7 +396,7 @@ class Segment_Mapper:
         while index < len(self.memory_list) and self.memory_list[index] and self.memory_list[index][0] != "section":
             tokens: list[str] = self.memory_list[index]
             if not self.bss_format_validation(tokens, index):
-                sys.exit(-2)
+                sys.exit(ExitCode.BSS_FORMAT_ERROR)
             times: int = int(tokens[2])
             number_of_bytes: int = self.SIZE_DIRECTIVES[tokens[1]][0]    
             size: int = number_of_bytes * times
@@ -470,7 +470,7 @@ class Segment_Mapper:
             index: int = self.skip_to_star()
         except SyntaxError as e:
             print(e)
-            sys.exit(1)
+            sys.exit(ExitCode.NO_START_LABEL)
 
         self.rip = index + 1 # Set instruction pointer to the line after the start declaration
         self.fetch_labels(index)
@@ -558,7 +558,7 @@ class Segment_Mapper:
             elif len(line) == 1 and line[0].endswith(":"):
                 if (Segment_Mapper.exists_in_section(line[0], self.labels)):
                     print(f"Label {line[0]} is duplicate on line {index}. Exiting program on a SyntaxError...")
-                    sys.exit(2)
+                    sys.exit(ExitCode.DUPLICATE_LABEL)
                 else:
                     self.labels[line[0]] = index
             index += 1
@@ -583,7 +583,7 @@ class Segment_Mapper:
             self.load_c_constant(line, index)
             return 
         elif not self.is_valid_constant_declaration(line, index):
-            sys.exit(-3)
+            sys.exit(ExitCode.CONSTANT_DECLARATION_ERROR)
 
         # Value getting
         value: int | str
@@ -593,7 +593,7 @@ class Segment_Mapper:
         else:
             value = self.get_constant_value(line[2])
 
-        self.constants[line[1]] = {'line': index, 'value': value}
+        self.constants[line[0]] = {'line': index, 'value': value}
 
     # ------------------------
     # Constant validation
@@ -609,10 +609,10 @@ class Segment_Mapper:
         :type index: int
         """
         if not self.common_constant_declaration_validation(line, line[1], index):
-            sys.exit(-3)
+            sys.exit(ExitCode.CONSTANT_DECLARATION_ERROR)
         elif not self.is_valid_value(line[2]):
             print(f"INVALID CONSTANT DECLARATION AT LINE {index}. Exiting program on a SyntaxError...")
-            sys.exit(-3)
+            sys.exit(ExitCode.CONSTANT_DECLARATION_ERROR)
         self.constants[line[1]] = {'line': index, 'value': self.get_constant_value(line[2])}
 
     # -----------------------------
@@ -651,10 +651,10 @@ class Segment_Mapper:
 
         # Label validation
         elif self._label_in_use(label, include_constants=True):
-            print(f"INVALID CONSTANT DECLARATION AT LINE {index}. Label {line[0]} already in use. Exiting program on a SyntaxError...")
+            print(f"INVALID CONSTANT DECLARATION AT LINE {index}. Label {label} already in use. Exiting program on a SyntaxError...")
             return False
         
-        elif not Segment_Mapper.valid_variable_name(line[0]):
+        elif not Segment_Mapper.valid_variable_name(label):
             print(f"INVALID CONSTANT NAME {label} AT LINE {index}. Exiting program on a SyntaxError...")
             return False
         return True
@@ -835,7 +835,7 @@ class Segment_Mapper:
                 self.registers.write_reg("rsp", rsp, False)
             except OverflowError as e:
                     print(e)
-                    sys.exit(16)
+                    sys.exit(ExitCode.STACK_OVERFLOW)
 
     def check_stack_limit(self, rsp: int, stack_limit: int) -> None:
         """

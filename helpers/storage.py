@@ -1,6 +1,7 @@
 import json
 import os
 import sys
+from exit_codes import ExitCode
 
 from conftest import CACHE_DIR, PROJECT_ROOT
 
@@ -173,7 +174,7 @@ class Storage:
                 return f.read()
         except FileNotFoundError:
             print(f"Something went wrong! File {file_name} couldn't be opened.\n     Exiting program...\n")
-            sys.exit(-1)
+            sys.exit(ExitCode.UNOPENABLE_FILE)
     
     @staticmethod
     def load_file_lines(file_name: str) -> list[str]:
