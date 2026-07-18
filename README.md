@@ -27,41 +27,57 @@ Before using please make sure your code follows the [Code format references](#co
 
 ## Pipeline
 
-```
- .asm file
-     │
-     ▼
-┌─────────────────────────┐
-│  segment_mapper.py      │   Phase 1 — mapping
-│  parse → validate → map │   (runs once, before execution)
-└─────────────────────────┘
-     │  symbol table, memory layout
-     ▼
-┌─────────────────────────┐
-│ control_unit.py         │  Phase 2 — execution loop
-│fetch → decode → dispatch│ (runs until exit / last instruction)
-└─────────────────────────┘
-     │  decoded instruction + operands
-     ▼
-┌─────────────────────────┐
-│ FUs/ (one class per     │
-│ instruction)            │
-└─────────────────────────┘
-     │  calls into C
-     ▼
-┌─────────────────────────┐        ┌───────────────────────────┐
-│ bridges/ (ctypes)       │───────>|   execution/ (C)          |
-│ register_manager.py     │        │ registers.c / memory_eng.c│
-│ data_memory.py          │        │ operations.c              │
-└─────────────────────────┘        └───────────────────────────┘
-     │
-     ▼
- CPU state (registers, flags, memory) updated
+```text
+  .asm file
+      │
+      ▼
+┌───────────────────────────┐
+│     segment_mapper.py     │     Phase 1 — mapping
+│ parse → validate → map    │     (runs once, before execution)
+└─────────────┬─────────────┘
+              │  symbol table, memory layout
+              ▼
+┌───────────────────────────┐          Phase 2 — execution loop
+│      control_unit.py      │ ◄────────────────────────────────────┐
+│  fetch → decode → dispatch│                                      │
+└──────┬──────────────▲─────┘                                      │
+       │              │                                            │
+       │              └──────────────────────┐                     │
+       │  decoded instructions               │                     │ (returns control)
+       │  + operands                         │                     │
+       │                                     ▼                     │
+       │                       ┌──────────────────────────┐        | 
+       │                       │     FUs/ (Functional     │ ───────┘
+       │                       │  Units: 1 class per inst)│
+       │                       └─────────┬──────▲─────────┘
+       │                                 │      │
+       │                    calls into C │      │ returns data/state
+       │                                 ▼      │
+       │                       ┌──────────────────────────┐
+       │                       │    bridges/ (ctypes)     │
+       │                       │   register_manager.py    │
+       │                       │      data_memory.py      │
+       │                       └─────────┬──────▲─────────┘
+       │                                 │      │
+       │                 executes logic  │      │ memory/reg updates
+       │                                 ▼      │
+       │                       ┌──────────────────────────┐
+       │                       │      execution/ (C)      │
+       │                       │  registers.c / memory.c  │
+       │                       │       operations.c       │
+       │                       └──────────────────────────┘
+       │
+       │ (loop finishes / exit code triggered)
+       ▼
+┌───────────────────────────────────────┐
+│       Final Interpreter State         │
+│  (CPU state: registers, flags, mem)   │
+└───────────────────────────────────────┘
 ```
 
 ## Project layout
- 
-```
+
+``` text
 CPU_SIMU/
 ├── parsing/
 │   ├── segment_mapper.py     # Phase 1: parse, map to memory, validate
@@ -86,6 +102,7 @@ CPU_SIMU/
 ├── program_cache/            # dir holding processed json files being used
 ├── helpers/
 ├── conftest.py
+├── exit_codes.py             # ExitCodes enum class holder
 ├── Makefile
 ├── interpreter.py            # programs class with similar behavior as main
 └── main.py
@@ -245,24 +262,21 @@ Constants declarations are a bit more nuanced. Allowed declarations include:
 
 ### Exit codes status reference
 
-Valid exit codes:
+The application returns the following exit codes to indicate success or specific failure states during execution:
 
-    code: 0
-        - status: successful exit
-    code: 109101  (aka "me" in ascii)
-        - status: unsuccessful exit due to a software bug
-    code: 1
-        - status: unsuccessful exit due to not finding an entry point to the program in .text parsing
-    code: 2
-        - status: unsuccessful exit due to finding a duplicated label declaration in .text parsing
-    code: 16
-        - status: unsuccessful exit due to stack overflow is detected (stack exceeds its allowed size)
-    code: -1
-        - status: unsuccessful exit due to incorrect .data/.rodata  format detected in parsing phase
-    code: -2
-        - status: unsuccessful exit due to incorrect .bss format detected in parsing phase
-    code: -3
-        - status: unsuccessful exit due to incorrect constant declaration format detected
+| Code | Enum Constant | Description |
+| :--- | :--- | :--- |
+| **0** | *Implicit* | Successful execution and exit. |
+| **-1** | `DATA_FORMAT_ERROR` | Unsuccessful exit due to incorrect `.data`/`.rodata` format detected in the parsing phase. |
+| **-2** | `BSS_FORMAT_ERROR` | Unsuccessful exit due to incorrect `.bss` format detected in the parsing phase. |
+| **-3** | `CONSTANT_DECLARATION_ERROR` | Unsuccessful exit due to an incorrect constant declaration format. |
+| **1** | `NO_START_LABEL` | Unsuccessful exit due to not finding an entry point to the program during `.text` parsing. |
+| **2** | `DUPLICATE_LABEL` | Unsuccessful exit due to a duplicated label declaration found during `.text` parsing. |
+| **4** | `UNOPENABLE_FILE` | Unsuccessful exit because the target file could not be opened or read. |
+| **5** | `STACK_OVERFLOW` | Unsuccessful exit due to a detected stack overflow (stack exceeds its allowed size). |
+| **10** | `INVALID_INSTRUCTION_SYNTAX` | Unsuccessful exit due to a syntax error in an instruction during parsing. |
+| **109101** | `SOFTWARE_ERROR` | Unsuccessful exit due to an internal software bug (ASCII representation of "me"). |
+
 ---
 
 ## Contributions
