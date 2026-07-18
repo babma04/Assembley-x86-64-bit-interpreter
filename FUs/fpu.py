@@ -1,22 +1,6 @@
 import ctypes
 import os
-
-class Operand(ctypes.Structure):
-    _fields_ = [
-        ("address", ctypes.c_int),
-        ("value", ctypes.c_int),
-        ("size", ctypes.c_int),
-        ("op_type", ctypes.c_char_p)
-    ]
-
-class Info(ctypes.Structure):
-    _fields_ = [
-        ("instruction", ctypes.c_char_p),
-        ("op1", Operand),
-        ("op2", Operand),
-        ("result", Operand)
-    ]
-
+import .common_classes
 class FPU:
     def __init__(self, lib_path: str="./libops.so"):
         self.lib = ctypes.CDLL(os.path.abspath(lib_path))
