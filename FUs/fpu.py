@@ -28,7 +28,7 @@ class FPU:
         self.lib.set_instruction.argtypes = [ctypes.c_char_p]
         self.lib.clean.argtypes = []
     
-    def load_values(self, instruction: str, op1_value: int, op1_address: int | None, op1_type: str | None, op1_size: int, op2_value: int, op2_address: int | None, op2_type: str | None, op2_size: int, flags: dict[str, int]) -> None:
+    def load_values(self, instruction: str, op1_value: int, op1_address: int | None, op1_type: str | None, op1_size: int, op2_value: int, op2_address: int | None, op2_type: str | None, op2_size: int) -> None:
         """
         Initializes the c structure in operations.c
         
@@ -50,8 +50,6 @@ class FPU:
         :type op2_type: str | None
         :param op2_size: Number of bytes the destination operand takes
         :type op2_size: int
-        :param flags: Current state of the program flags
-        :type flags: dict[str, int]
         """
         self.lib.set_instruction(instruction)
         if op1_type != None:

@@ -8,6 +8,7 @@ from helpers.my_types import DataSectionInfo, BssSectionInfo, LabelMap, Constant
 from FUs.data_path import Data_Path
 from FUs.alu import ALU
 from FUs.fpu import FPU
+from exit_codes import ExitCode
 
 
 class Control_Unit:
@@ -55,19 +56,16 @@ class Control_Unit:
         # Initialize Control Unit with memory, segment mapper, functional units and registers (general purpose, fpu and flags)
         self.registers = loader.registers
         self.memory: Data_Memory = loader.memory
-        self.loader: Segment_Mapper = loader
         self.data_path: Data_Path = Data_Path(self.registers)
         self.alu: ALU = ALU(self.registers)
         self.fpu: FPU = FPU()     
-        
+
+        # Useful registers and flags attributes
+        self.registers: Registers_Interface = Registers_Interface()
+        self.rip: int = loader.rip  # Instruction Pointer initialized from Segment Mapper
         # Turns debugging on
         if debugging:
             self.registers.Exch_trap_flag()
-
-        # Usefull registers and flags attributes
-        self.registers: Registers_Interface = Registers_Interface()
-        self.rip: int = loader.rip  # Instruction Pointer initialized from Segment Mapper
-        self.flags: ... # Register Interface method that returns the full flags state
 
         # Parsed sections from segment_mapper
         self.text_section: list[list[str]] = loader.memory_list
@@ -77,11 +75,15 @@ class Control_Unit:
         self.labels: LabelMap = loader.labels
         self.constants: ConstantMap = loader.constants
 
+        # Valid instruction table
+        self.valid_instructions: dict[str, dict[str, int]] = Storage.read_valid_instructions(validation_file_name)
+
+
         # Helper instances for the execution
         self.finished: bool = False
         self.current_fu: str = "cpu" # (cpu/data_path/alu/fpu)
         self.current_instruction: str | None = None
-        self.op1: str | None = None
+        self.op1: str | None = None # exact expression
         self.op1_size: int = 0  # size must be 0 if self.op1 = None
         self.op1_value: bytes = b"" # value must be 0 if self.op1 = None
         self.op1_address: int | None = None # address must be None if self.op1 is not a memory operand
@@ -91,18 +93,17 @@ class Control_Unit:
         self.op2_value: bytes = b"" # value must be 0 if self.op2 = None
         self.op2_address: int | None = None # address must be None if self.op2 is not a memory operand
         self.op2_type: str | None = None # type must be None if self.op2 = None, otherwise it must be either 'direct memory'/'base memory'/'indexed memory'/'address'/'register'/'constant'/'immediate'
-        self.valid_instructions: dict[str, dict[str, int]] = Storage.read_valid_instructions(validation_file_name)
 
 
     #---------------------------------
-    # Cicle execution methods
+    # Cycle execution methods
     #---------------------------------
 
     def run(self) -> None:
         self.rip += 1
         # Improve this loop to enable debugging features
         while not self.finished:
-            # Debbuging feature: Trap flag verification. If the trap flag is raised, execute the trap flag command and halt execution before executing the instruction in the current line.
+            # Debugging feature: Trap flag verification. If the trap flag is raised, execute the trap flag command and halt execution before executing the instruction in the current line.
             if self.registers.read_trap_flag() == 1:
                 # Should allow for gdb command actions
                 self.execute_state_command()
@@ -114,16 +115,16 @@ class Control_Unit:
     
     def step(self) -> None:
         try:
-            # 1. Gets the instruction, operands and funtional unit in use and verifies it's compatibility it the operator count of the instruction
+            # 1. Gets the instruction, operands and functional unit in use and verifies it's compatibility it the operator count of the instruction
             if len(self.text_section) > self.rip:
                 self.fetch()
             else:
                 print("NO VALID EXIT WAS VALID TO THE PROGRAM.\n Forcing program's exit...")
                 sys.exit(100)
-            # current_instruction will only be 'None' if rip points to a label in .text (which should be skiped)
+            # current_instruction will only be 'None' if rip points to a label in .text (which should be skipped)
             if self.current_instruction != None:
-                # 2. Verifies if the instruction-operand set is valid and triggers the execution of the instruction in the respective funtional unit
-                self.execute(self.current_instruction, self.op1_value, self.op1_address, self.op1_type, self.op1_size, self.op2_value, self.op2_address, self.op2_type, self.op2_size, self.flags)
+                # 2. Verifies if the instruction-operand set is valid and triggers the execution of the instruction in the respective functional unit
+                self.execute(self.current_instruction, self.op1_value, self.op1_address, self.op1_type, self.op1_size, self.op2_value, self.op2_address, self.op2_type, self.op2_size)
                 # 3. Increases rip 
             self.rip += 1
         except ValueError as e:
@@ -169,15 +170,15 @@ class Control_Unit:
                 self.set_operand("both", None, 0)
                 raise ValueError(f"INVALID OPERAND COUNT FOR INSTRUCTION {self.current_instruction} AT LINE {self.rip}!")
         
-        # If the instruction wasn't found, raise an excpetion
+        # If the instruction wasn't found, raise an exception
         else:
             raise ValueError(f"INVALID INSTRUCTION AT LINE {self.rip}!")
     
-    def execute(self, instruction: str, op1_value: bytes, op1_address: int | None, op1_type: str | None, op1_size: int, op2_value: bytes, op2_address: int | None, op2_type: str | None, op2_size: int, flags: dict[str, int]) -> None:
+    def execute(self, instruction: str, op1_value: bytes, op1_address: int | None, op1_type: str | None, op1_size: int, op2_value: bytes, op2_address: int | None, op2_type: str | None, op2_size: int) -> None:
         """
-        Transfers executions to the class with the funtional unit responsible for the instaruction
+        Transfers executions to the class with the functional unit responsible for the instruction
         in the current instruction in this class's respective instance
-        and retrives the result of the operation if any and the flags state that resulted from the operation.
+        and retrieves the result of the operation if any and the flags state that resulted from the operation.
         
         """
         if self.current_fu == "cpu":
@@ -187,7 +188,7 @@ class Control_Unit:
                 self.call()
         else:
             current_fu: FU = self.get_current_fu()
-            current_fu.load_values(instruction, int(op1_value), op1_address, op1_type, op1_size, int(op2_value), op2_address, op2_type, op2_size, flags)
+            current_fu.load_values(instruction, int(op1_value), op1_address, op1_type, op1_size, int(op2_value), op2_address, op2_type, op2_size)
             current_fu.execute()
             self.validate_execution_state(current_fu)
 
@@ -258,7 +259,7 @@ class Control_Unit:
                 self.set_operand("both", None, 0)   # Will never return a ValueError
             except ValueError as e:
                 print(e)
-                sys.exit(...)
+                sys.exit(ExitCode.INVALID_INSTRUCTION_SYNTAX)
             raise ValueError(f"INVALID SYNTAX FOR INSTRUCTION {self.current_instruction} AT LINE {self.rip}!")
         
         else:
@@ -268,10 +269,10 @@ class Control_Unit:
                 self.parse_operand_info(operand_info)
             except ValueError as e:
                 print(e)
-                sys.exit(109101)
+                sys.exit(ExitCode.SOFTWARE_ERROR)
             except SyntaxError as e:
                 print(e)
-                sys.exit(...)
+                sys.exit(ExitCode.INVALID_INSTRUCTION_SYNTAX)
     
     def valid_operand_count(self) -> bool:
         """
@@ -281,7 +282,7 @@ class Control_Unit:
         :rtype: bool
         """
         # Gets the number of expected arguments of an instruction based on the valid_instructions.json file
-        expected_operand_count: int = self.valid_instructions[self.current_fu][self.current_instruction]
+        expected_operand_count: int = self.valid_instructions[self.current_fu][self.current_instruction]    # type: ignore 
         # Gets the number of operands in use for for the current instruction   
         actual_operand_count: int = 0
         if self.op1 != None:
@@ -540,7 +541,7 @@ class Control_Unit:
                         ret_list[max_ret_value-1] = str(self.get_register_size(line[i]))
                     except SyntaxError as e:
                         print(e)
-                        sys.exit(...)
+                        sys.exit(ExitCode.INVALID_INSTRUCTION_SYNTAX)
                     max_ret_value -= 2
                 else:
                     ret_list[max_ret_value-1] = ""
@@ -688,12 +689,12 @@ class Control_Unit:
                 list = Control_Unit.get_new_list(list, ret_list[-1], 3)
         except ValueError as e:
             print(f"{e}")
-            sys.exit(...)   # To be determined
+            sys.exit(ExitCode.INVALID_INSTRUCTION_SYNTAX)   # To be determined
         try:
             ret += Control_Unit.calculate_list(list)
         except ValueError:
             print(f"INVALID EXPRESSION {expression} IN MEMORY ADDRESSING MODE AT LINE {self.rip}!")
-            sys.exit(...)   # To be determined
+            sys.exit(ExitCode.INVALID_INSTRUCTION_SYNTAX)   # To be determined
         return ret
 
     def get_encoded_value(self, value: str | int) -> int:
@@ -886,7 +887,7 @@ class Control_Unit:
             parsed_address_expression: list[str] = self.parse_address_expression(components, expression)
         except ValueError as e:
             print(e)
-            sys.exit(...)
+            sys.exit(ExitCode.INVALID_INSTRUCTION_SYNTAX)
         return self.get_address_value(parsed_address_expression, expression)
 
     def parse_address_expression(self, components: list[str], expression: str) -> list[str]:

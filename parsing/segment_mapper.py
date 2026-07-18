@@ -937,7 +937,7 @@ class Segment_Mapper:
         :return: true if a match was found, false if it wasn't
         :rtype: bool
         """
-        return variable in section
+        return variable in section # type: ignore
     
     @staticmethod
     def _valid_size_specifier(specifier: str, section: str) -> bool:
