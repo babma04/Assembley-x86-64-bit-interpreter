@@ -1,7 +1,7 @@
 class Operand:
-    __slots__ = ["type", "value", "size", "valid"]
+    __slots__ = ["expression", "type", "value", "size", "valid"]
 
-    def __init__ (self, type: str="", value: bytes=b"", size: int=0) -> None:
+    def __init__ (self) -> None:
         """
         Initializes the parameters of the operand if they are defined
 
@@ -12,12 +12,13 @@ class Operand:
         :param size: Number of bytes to use
         :type size: int
         """
-        self.valid: bool = True # Information validity flag for usability
-        self.type: str = type   # register/ memory/ immediate
-        self.value: bytes = value   
-        self.size: int = size   # number of bytes
+        self.valid: bool = False # Information validity flag for usability
+        self.expression: str = ""
+        self.type: str = ""   # register/ memory/ immediate
+        self.value: bytes = b""   
+        self.size: int = 0   # number of bytes
 
-    def set (self, type: str, value: bytes, size: int) -> None:
+    def set (self,expression: str, type: str, value: bytes, size: int) -> None:
         """
         Sets the parameters of the operand \n
         Needs all parameters to be specified.\n
@@ -31,6 +32,7 @@ class Operand:
         :type size: int
         """
         self.valid = True 
+        self.expression = expression
         self.type = type   
         self.value = value   
         self.size = size   
