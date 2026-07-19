@@ -1,8 +1,12 @@
 import sys
 from helpers.storage import Storage
+from helpers.my_types import DataSectionInfo, BssSectionInfo, LabelMap, ConstantMap, Address
+
 from bridges.data_memory import Data_Memory
 from bridges.register_manager import Registers_Interface
-from helpers.my_types import DataSectionInfo, BssSectionInfo, LabelMap, ConstantMap, Address
+
+from parsing.patter_matching_helpers import SIZE_DIRECTIVES, RODATA_BASE, DATA_BASE, BSS_BASE, STACK_START, TOKENS_PATTERN, ELEMENTS_TO_SKIP
+
 from exit_codes import ExitCode
 import re
 
@@ -35,44 +39,6 @@ class Segment_Mapper:
         'bss_segment', 'labels', 'constants', 'file_name', 
         'memory','valid_start', 'rip', 'registers'
     )
-
-    # Directives for size identification and memory allocation verification
-    SIZE_DIRECTIVES = {
-        'db': (1, True), 'dw': (2, True), 'dd': (4, True), 'dq': (8, True),
-        'resb': (1, False), 'resw': (2, False), 'resd': (4, False), 'resq': (8, False)
-    }
-
-    MASKS_DIRECTIVES = {
-        'byte': 0xFF, 'word': 0xFFFF, 'dword': 0xFFFFFFFF, 'qword': 0xFFFFFFFFFFFFFFFF
-    }
-
-    # Architecture Constants for sections start and memory allocation
-    TEXT_BASE = 0x400000
-    RODATA_BASE = 0x500000
-    DATA_BASE = 0x600000
-    BSS_BASE = 0x700000
-    STACK_START = 0x7fffffffe000
-
-    # -----------------------------
-    # Pattern-Matching Expressions
-    # -----------------------------
-
-    TOKENS_PATTERN = r"""(?x)
-        ".*?"|'.*?'|                  # Strings
-        \[.*?\]|                      # Memory access
-        \(.*?\)|                      # Parenthesized expressions
-        0x[\da-fA-F]+|                # Hex Prefix
-        \d+[\da-fA-F]*[hH]|           # Hex Suffix
-        [01]+[bB]|                    # Binary
-        0b[01]+|                      # Binary
-        [a-zA-Z_]\w*|                 # Instructions / Registers / Labels
-        [-+]?\d+                      # Signed Decimals
-    """
-    ELEMENTS_TO_SKIP = r'^[,\s]+$'  # Commas and whitespace to skip during parsing
-
-    NUMBER_REPRESENTATION_PATTERN = r'(0x[\da-fA-F]+|\d[\da-fA-F]*h|0b[01]+|[01]+b|0d\d+|[-+]?\d+d|[0-7]+[oq]|[-+]?\d+)'
-    WORD_OR_CHARACTERS_PATTERN = r'(\".*?\"|\'.*?\')'
-    IMMEDIATE_VALUE_PATTERN = fr'({NUMBER_REPRESENTATION_PATTERN}|{WORD_OR_CHARACTERS_PATTERN})'
 
 
     def __init__(self, file_name: str, argvcount: int = 0, argv: list[str] | None = None, validation_file_name: str = "valid_instructions.json", stack_limit: int = 0x7fff00000000) -> None:
@@ -123,7 +89,7 @@ class Segment_Mapper:
         # Register handler class instance
         self.registers: Registers_Interface = Registers_Interface()
         # Memory handler class instance 
-        self.memory: Data_Memory = Data_Memory(self.registers, self.RODATA_BASE)
+        self.memory: Data_Memory = Data_Memory(self.registers, RODATA_BASE)
         
         self.load_program(self.file_name)
         self.load_text()
@@ -149,8 +115,8 @@ class Segment_Mapper:
         self.memory_list = []
         for line in program_lines:
             code_part: str = line.split(";")[0].strip()
-            tokens: list[str] = re.findall(self.TOKENS_PATTERN, code_part)
-            tokens = [token for token in tokens if not re.match(self.ELEMENTS_TO_SKIP, token)]
+            tokens: list[str] = re.findall(TOKENS_PATTERN, code_part)
+            tokens = [token for token in tokens if not re.match(ELEMENTS_TO_SKIP, token)]
             self.memory_list.append(tokens)
         Storage.save_file(file_name, self.memory_list)
 
@@ -164,7 +130,7 @@ class Segment_Mapper:
         """
         # Pointers for lines of usable memory and address at use from a Data_memory object
         index: int = 0
-        current_rip: Address = Segment_Mapper.RODATA_BASE
+        current_rip: Address = RODATA_BASE
         while index < self.rip:
             tokens = self.memory_list[index]
 
@@ -177,12 +143,12 @@ class Segment_Mapper:
                 section_name: str = tokens[1]
                 if section_name.lstrip(".") == "rodata" or section_name.lstrip(".") == "data":
                     if section_name.lstrip(".") == "rodata":
-                        current_rip = Segment_Mapper.RODATA_BASE
+                        current_rip = RODATA_BASE
                     else :
-                        current_rip = Segment_Mapper.DATA_BASE
+                        current_rip = DATA_BASE
                     current_rip = self.load_data(current_rip, index, section_name.lstrip("."))
                 elif section_name.lstrip(".") == "bss":
-                    current_rip = Segment_Mapper.BSS_BASE
+                    current_rip = BSS_BASE
                     current_rip = self.load_bss(current_rip, index)
                 elif section_name.lstrip(".") == "text":
                     return
@@ -324,7 +290,7 @@ class Segment_Mapper:
         # times to declare a variable data
         times: int = int(line[2])
         # size declaration of the variable
-        number_of_bytes: int = self.SIZE_DIRECTIVES[line[3]][0]
+        number_of_bytes: int = SIZE_DIRECTIVES[line[3]][0]
         # total number of bytes to allocate
         size: int = number_of_bytes * times
 
@@ -347,7 +313,7 @@ class Segment_Mapper:
         :return: updated pointer to the Address in use to store values in the Data_memory object
         :rtype: Address
         """
-        number_of_bytes: int = self.SIZE_DIRECTIVES[line[1]][0]
+        number_of_bytes: int = SIZE_DIRECTIVES[line[1]][0]
         size: int = number_of_bytes * (len(line) - 2)
         # Initializes the new entry on the correct section
         self._define_segment(section, line[0], size, current_rip)
@@ -370,7 +336,7 @@ class Segment_Mapper:
         :return: updated pointer to the Address in use to store values in the Data_memory object
         :rtype: Address
         """
-        number_of_bytes: int = self.SIZE_DIRECTIVES[line[1]][0]
+        number_of_bytes: int = SIZE_DIRECTIVES[line[1]][0]
         size: int = number_of_bytes
         addresses: list[Address] = self._define_segment(section, line[0], size, current_rip)
 
@@ -398,7 +364,7 @@ class Segment_Mapper:
             if not self.bss_format_validation(tokens, index):
                 sys.exit(ExitCode.BSS_FORMAT_ERROR)
             times: int = int(tokens[2])
-            number_of_bytes: int = self.SIZE_DIRECTIVES[tokens[1]][0]    
+            number_of_bytes: int = SIZE_DIRECTIVES[tokens[1]][0]    
             size: int = number_of_bytes * times
             if not Segment_Mapper._exists_in_section(tokens[0], self.bss_segment):
                 self.bss_segment[tokens[0]] = {'size': size, 'addresses': []}
@@ -951,9 +917,9 @@ class Segment_Mapper:
         :return: True if the size specifier is valid, False otherwise
         :rtype: bool
         """
-        if specifier not in Segment_Mapper.SIZE_DIRECTIVES:
+        if specifier not in SIZE_DIRECTIVES:
             return False
-        is_initialized = Segment_Mapper.SIZE_DIRECTIVES[specifier][1]
+        is_initialized = SIZE_DIRECTIVES[specifier][1]
         return is_initialized if section in ("data", "rodata") else not is_initialized
     
     @staticmethod
