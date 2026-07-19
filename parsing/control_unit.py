@@ -144,9 +144,14 @@ class Control_Unit:
         """
         line: list[str] = self.text_section[self.rip]
 
+        # Means parsing failed to filter out empty lines and potentially comments too
+        if not line:
+            sys.exit(ExitCode.SOFTWARE_ERROR)
+        
         # Verifies if the line is a label declaration and skips it if so
         if len(line) == 1 and line[0] in self.labels:
             return 
+        
         # Verifies if the line is an instruction and sets the instruction, f.u. in use and operand info needed for execution (size, type, value, address)
         elif self.is_valid_instruction(line[0]):
             self.current_instruction = line[0]
@@ -214,23 +219,23 @@ class Control_Unit:
     def is_valid_instruction(self, instruction: str) -> bool:
         """
         Verifies if a given instruction is supported by the program and if so sets the current functional unit in use.\n
-        Enables syscalls and function calls methods taken care by this class.
+        Enables syscall's and function calls methods taken care by this class.
 
         :param instruction: Instruction in verification
         :type instruction: str
         :return: True if the instruction is present in the valid_instructions.json file
         :rtype: bool
         """
+
+        if instruction == "syscall" or instruction == "call":
+            self.current_fu = "cpu"
+            return True
+        
         for functional_units in self.valid_instructions.keys():
             if instruction in self.valid_instructions[functional_units]:
                 self.current_fu = functional_units
                 return True
-            elif instruction == "syscall":
-                self.current_fu = "cpu"
-                return True
-            elif instruction == "call":
-                self.current_fu = "cpu"
-                return True
+
         return False
     
     def validate_operands(self, line: list[str]) -> None:
@@ -258,7 +263,7 @@ class Control_Unit:
                 self.set_operand("both", None, 0)   # Will never return a ValueError
             except ValueError as e:
                 print(e)
-                sys.exit(ExitCode.INVALID_INSTRUCTION_SYNTAX)
+                sys.exit(ExitCode.SOFTWARE_ERROR)
             raise ValueError(f"INVALID SYNTAX FOR INSTRUCTION {self.current_instruction} AT LINE {self.rip}!")
         
         else:
