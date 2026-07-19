@@ -1,3 +1,6 @@
+import sys
+from exit_codes import ExitCode
+
 class Operand:
     __slots__ = ["expression", "type", "value", "size", "valid"]
 
@@ -24,6 +27,8 @@ class Operand:
         Needs all parameters to be specified.\n
         Sets validity to True and enables use of this Operand info
 
+        :param expression: Unprocessed expression of the operand
+        :type expression: str
         :param type: Type of the operand (register/memory/immediate)
         :type type: str
         :param value: Value of the operand
@@ -57,12 +62,13 @@ class Operand:
 
 class Instruction_Parser:
     
-    __slots__ = ("op1","op2","line")
+    __slots__ = ("op1","op2","line", "rip")
 
-    def __init__ (self, op1: Operand, op2: Operand, line: list[str]=[]):
+    def __init__ (self, op1: Operand, op2: Operand, expected_op_count: int = 0, line: list[str]=[]):
         self.op1: Operand = op1
         self.op2: Operand
         self.line = line
+        self.rip: int = -1 # Reset immediately before any call to parser
     
 
     def parse(self) -> None:
@@ -70,22 +76,15 @@ class Instruction_Parser:
             self.validate_operands(self.line)
             self.set_operand_type(self.line)
             self.set_operand_value_and_address(self.line)
-        except ValueError as e:
-            print(f"Error at line {self.rip}: {e}")
-            self.current_instruction = ""
-            self.finished = True
+        except SyntaxError as e:    # validate Operands
+            raise SyntaxError(e)
+        
+        except ValueError as e:     # Operand setting
+            raise SyntaxError(e)
 
-        # Verifies if the number of operands registered are compatible with the instructions documentation in the valid_instructions json file    
-        if self.valid_operand_count():
-            return
-        else:
-            # If incompatible reset all info to a Null value and raise an exception
-            self.set_operand("both", None, 0)
-            raise ValueError(f"INVALID OPERAND COUNT FOR INSTRUCTION {self.current_instruction} AT LINE {self.rip}!")
-
-    #-----------------------------------
+    # -----------------------------------
     # General validation methods
-    #-----------------------------------
+    # -----------------------------------
     
     def validate_operands(self, line: list[str]) -> None:
         """
@@ -94,26 +93,21 @@ class Instruction_Parser:
 
         :param line: List of strings representing the instruction line
         :type line: list[str]
-        :raises ValueError: If the operands are invalid for the current instruction, including invalid syntax or invalid operand sets
+        :raises SyntaxError: If the operands are invalid for the current instruction, including invalid syntax or invalid operand sets
         """
         instruction_length: int = len(line)
 
         if instruction_length == 1:
         # One element code line means a no explicit operand so set both to a Null value
-            try:
-                self.set_operand("both", None, 0)
-                return
-            except ValueError as e:
-                raise ValueError(e)
+            self.op1.clear()
+            self.op2.clear()
+            return
             
         elif instruction_length > 5:
             # instructions with more than 5 elements means it is most definitely wrong syntax
-            try:
-                self.set_operand("both", None, 0)   # Will never return a ValueError
-            except ValueError as e:
-                print(e)
-                sys.exit(ExitCode.SOFTWARE_ERROR)
-            raise ValueError(f"INVALID SYNTAX FOR INSTRUCTION {self.current_instruction} AT LINE {self.rip}!")
+            self.op1.clear()
+            self.op2.clear()
+            raise SyntaxError
         
         else:
             # If none of the above cases are triggered try to parse the operands and sizes
@@ -126,55 +120,29 @@ class Instruction_Parser:
             except SyntaxError as e:
                 print(e)
                 sys.exit(ExitCode.INVALID_INSTRUCTION_SYNTAX)
-    
-    def valid_operand_count(self) -> bool:
-        """
-        Verifies if the current operand count is valid for the current instruction
-
-        :return: True if the current operand count is valid for the current instruction
-        :rtype: bool
-        """
-        # Gets the number of expected arguments of an instruction based on the valid_instructions.json file
-        expected_operand_count: int = self.valid_instructions[self.current_fu][self.current_instruction]    # type: ignore 
-        # Gets the number of operands in use for for the current instruction   
-        actual_operand_count: int = 0
-        if self.op1 != None:
-            actual_operand_count += 1
-        if self.op2 != None:
-            actual_operand_count += 1
-        # Returns if they both match (valid operand count)    
-        return expected_operand_count == actual_operand_count        
+              
 
     #---------------------------
     # Operand setting methods
     #---------------------------
 
-    def set_operand(self, operand: str, expression: str | None, size: int) -> None:
+    def set_operand(self, operand: str, expression: str, type: str, value: bytes, size: int) -> None:
         """
-        Attribute a declaration expression and a size to the respective attributes  of the specified operand.
+        Automates the operand 
 
-        :param operand: Expression for which operand(s) to update (both/op1/op2)
+        :param operand: Expression for which operand(s) to update (op1/op2)
         :type operand: str
         :param expression: Unaltered expression used to refer to the operand in the line of code
-        :type expression: str | None
+        :type expression: str
+        :param type: Type of operand (register/ memory/ immediate)
+        :type type: str
+        :param value: Value of the operand
+        :type value: str
         :param size: Number of bytes used by the operand(s)
         :type size: int
-        :raises ValueError: If an invalid operand identifier is used
         """
-        if operand == "both":
-            self.op1 = expression
-            self.op1_size = size
-            self.op2 = expression
-            self.op2_size = size
-        elif operand == "op1":
-            self.op1 = expression
-            self.op1_size = size
-        elif operand == "op2":
-            self.op2 = expression
-            self.op2_size = size
-        else:
-            raise ValueError(f"INVALID OPERAND IDENTIFIER {operand} USED. IT SHOULD BE EITHER 'both'/'op1'/'op2'!")
-        
+        getattr(self, operand).set(expression, type, value, size)
+
     def set_operand_type(self, line: list[str]) -> None:
         """
         Attribute a type to the operand type attributes based on the operand expression

@@ -127,7 +127,23 @@ class Control_Unit:
         elif self.is_valid_instruction(line[0]):
             self.current_instruction = line[0]
             self.instruction_parser.line = line
-            self.instruction_parser.parse()
+            try:
+                self.instruction_parser.rip = self.rip
+                self.instruction_parser.parse()
+            except SyntaxError as e:
+                ...
+            except ValueError as e:
+                ...
+
+            # Verifies if the number of operands registered are compatible with the instructions documentation in the valid_instructions json file    
+            if self.valid_operand_count():
+                return
+            else:
+                # If incompatible reset all info to a Null value and raise an exception
+                self.op1.clear()
+                self.op2.clear()
+                print(f"INVALID OPERAND COUNT FOR INSTRUCTION AT LINE {self.rip}. Exiting program...")
+                sys.exit(ExitCode.INVALID_INSTRUCTION_SYNTAX)
         
         # If the instruction wasn't found, raise an exception
         else:
@@ -193,6 +209,15 @@ class Control_Unit:
             return self.fpu
         else:
             raise ValueError("NO FUNCTIONAL UNIT FOUND.\n Exiting program...")
+        
+    def valid_operand_count(self) -> bool:
+        """
+        Verifies if the current operand count is valid for the current instruction
+
+        :return: True if the current operand count is valid for the current instruction
+        :rtype: bool
+        """
+        return self.valid_instructions[self.current_fu][self.current_instruction] == (self.op1.is_valid() + self.op2.is_valid())
         
     
     # -------------------------------
