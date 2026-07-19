@@ -61,7 +61,6 @@ class Control_Unit:
         self.fpu: FPU = FPU()     
 
         # Useful registers and flags attributes
-        self.registers: Registers_Interface = Registers_Interface()
         self.rip: int = loader.rip  # Instruction Pointer initialized from Segment Mapper
         # Turns debugging on
         if debugging:
@@ -116,7 +115,7 @@ class Control_Unit:
     def step(self) -> None:
         try:
             # 1. Gets the instruction, operands and functional unit in use and verifies it's compatibility it the operator count of the instruction
-            if len(self.text_section) > self.rip:
+            if self.rip < len(self.text_section):
                 self.fetch()
             else:
                 print("NO VALID EXIT WAS VALID TO THE PROGRAM.\n Forcing program's exit...")
@@ -444,9 +443,9 @@ class Control_Unit:
                 raise ValueError(f"UNABLE TO DETERMINE OPERAND TYPE FOR {operand} AT LINE {self.rip}!")
         except ValueError as e:
             print(e)
-            sys.exit(...)
+            sys.exit(ExitCode.INVALID_INSTRUCTION_SYNTAX)
     
-    ### RETURNOF BYTES MUST BE DELT WITH
+    ### RETURN OF BYTES MUST BE DEALT WITH
 
     def determine_operand_value_and_address(self, operand: str, operand_type: str | None, operand_size: int, operation_size: int, memory: Data_Memory) -> tuple[bytes, int|None]:
         """
@@ -863,7 +862,7 @@ class Control_Unit:
         elif (op_info[0] == "" or op_info[2] == "") and not (self.is_register(op_info[1]) or self.is_register(op_info[3])):
             raise SyntaxError(f"INVALID SYNTAX FORMAT AT LINE {self.rip}!")
         else:
-            # If a register existes and one of the sizes for the operands is a null identifier, give it the size of the register used
+            # If a register exists and one of the sizes for the operands is a null identifier, give it the size of the register used
             if op_info[0] == "" or op_info[2] == "":
                 if self.is_register(op_info[1]):
                     op_info[2] = op_info[0]
@@ -940,7 +939,7 @@ class Control_Unit:
         :type components: list[str]
         :param expression: Expression of a memory addressing operand 
         :type expression: str
-        :return: Parial calculation of the address and the index of the first element used in the calculation (will use always 3 followed indexes). Only multiplications calculated.
+        :return: Partial calculation of the address and the index of the first element used in the calculation (will use always 3 followed indexes). Only multiplications calculated.
         :rtype: list[int]
         :raises ValueError: If a multiplication is detected but can't be calculated due to bad syntax
         """
@@ -962,11 +961,11 @@ class Control_Unit:
             return [0,-1]
     
     # -------------------------
-    # DEBBUGGING METHODS
+    # DEBUGGING METHODS
     # -------------------------
     def execute_state_command(self) -> None:
         """
-        Ciclycally asks for user input to execute commands to print the state of the program in execution.\n
+        Cyclically asks for user input to execute commands to print the state of the program in execution.\n
         Commands are:\n
         - 'registers': prints the state of the registers
         - 'memory': prints the state of the memory
@@ -981,7 +980,7 @@ class Control_Unit:
         - 'exit': exits the program and stops execution
         If an invalid command is given it will print an error message and ask for a new command.
         """
-        while True:
+        while True: # Transform into a case switch 
             command: str = input("Enter a command to print the state of the program or 'help' to see the list of commands available: ")
             if command == "registers":
                 # self.print_registers()
