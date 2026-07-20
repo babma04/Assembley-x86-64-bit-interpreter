@@ -209,7 +209,7 @@ class TestSegmentMapperTextAndLabelDiscovery(unittest.TestCase):
     @patch.object(Segment_Mapper, '__init__', return_value=None)
     def setUp(self, mock_init):
         self.mapper = Segment_Mapper("dummy.asm")
-        self.mapper.valid_start = "_start"
+        self.mapper.VALID_START = "_start"
         self.mapper.labels = {}
         self.mapper.memory_list = []
 

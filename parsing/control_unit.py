@@ -4,8 +4,9 @@ from helpers.my_types import DataSectionInfo, BssSectionInfo, LabelMap, Constant
 
 from bridges.data_memory import Data_Memory
 
-from parsing.segment_mapper import Segment_Mapper
-from parsing.instruction_parser import Instruction_Parser, Operand
+from .patter_matching_helpers import INSTRUCTIONS
+from .segment_mapper import Segment_Mapper
+from .instruction_parser import Instruction_Parser, Operand
 
 from FUs.data_path import Data_Path
 from FUs.alu import ALU
@@ -26,10 +27,10 @@ class Control_Unit:
 
     __slots__ = ["registers", "memory", "data_path", "alu", "fpu", "rip", 
                  "text_section", "rodata_section", "data_section", "bss_section", "labels", "constants", 
-                 "valid_instructions", "finished", 
+                 "finished", 
                  "current_fu", "current_instruction", "op1", "op2", "instruction_parser"]
 
-    def __init__ (self,loader: Segment_Mapper, validation_file_name: str, debugging:bool = False) -> None:
+    def __init__ (self,loader: Segment_Mapper, debugging:bool = False) -> None:
         # Initialize Control Unit with memory, segment mapper, functional units and registers (general purpose, fpu and flags)
         self.registers = loader.registers
         self.memory: Data_Memory = loader.memory
@@ -50,9 +51,6 @@ class Control_Unit:
         self.bss_section: BssSectionInfo = loader.bss_segment
         self.labels: LabelMap = loader.labels
         self.constants: ConstantMap = loader.constants
-
-        # Valid instruction table
-        self.valid_instructions: dict[str, dict[str, int]] = Storage.read_valid_instructions(validation_file_name)
 
         # Helper instances for the execution
         self.finished: bool = False
@@ -187,8 +185,8 @@ class Control_Unit:
             self.current_fu = "cpu"
             return True
         
-        for functional_units in self.valid_instructions.keys():
-            if instruction in self.valid_instructions[functional_units]:
+        for functional_units in INSTRUCTIONS.keys():
+            if instruction in INSTRUCTIONS[functional_units]:
                 self.current_fu = functional_units
                 return True
 
@@ -217,7 +215,7 @@ class Control_Unit:
         :return: True if the current operand count is valid for the current instruction
         :rtype: bool
         """
-        return self.valid_instructions[self.current_fu][self.current_instruction] == (self.op1.is_valid() + self.op2.is_valid())
+        return INSTRUCTIONS[self.current_fu][self.current_instruction] == (self.op1.is_valid() + self.op2.is_valid())
         
     
     # -------------------------------

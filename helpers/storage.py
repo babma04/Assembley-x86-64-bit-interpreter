@@ -1,8 +1,10 @@
 import json
 import os
 import sys
-from exit_codes import ExitCode
 
+from parsing.patter_matching_helpers import INSTRUCTIONS
+
+from exit_codes import ExitCode
 from conftest import CACHE_DIR, PROJECT_ROOT
 
 class Storage:
@@ -61,33 +63,6 @@ class Storage:
                     os.remove(file_path)
             except Exception as e:
                 print(f"Error while deleting file {file_path}: {e}")
-    
-    @staticmethod
-    def update_valid_instructions(new_data: dict[str, dict[str, int]]) -> None:
-        """
-        Helper method to update the valid instructions in the settings file (valid_instructions.json).
-        Enables unperturbed updates to the instruction set without overwriting other settings.
-
-        :param new_data: A dictionary containing the new valid instructions.
-        :type new_data: dict[str, dict[str, int]]
-        :raises FileNotFoundError: If the configuration file is missing from cache.
-        """
-        file_name = "valid_instructions.json"
-        file_path = Storage._get_path(file_name)
-
-        if not os.path.isfile(file_path):
-            raise FileNotFoundError(f"{file_name} does not exist in the cache directory.")
-
-        with open(file_path, "r") as file:
-            data = json.load(file)
-
-        # Update only the instruction sections safely
-        for key, value in new_data.items():
-            if key in data and isinstance(data[key], dict):
-                data[key] = value
-
-        with open(file_path, "w") as file:
-            json.dump(data, file, indent=4)
 
     @staticmethod
     def get_raw_file_name(file_name: str) -> str:
@@ -188,46 +163,3 @@ class Storage:
         file_path = Storage._get_path(file_name)
         with open(file_path, "r") as f:
             return json.load(f)
-    
-    @staticmethod
-    def initialize_instructions() -> str:
-        """
-        Initializes the base setting instruction json if absent from cache.
-        """
-        file_name = "valid_instructions.json"
-
-        if not os.path.isfile(Storage._get_path(file_name)):
-            data : dict[str, dict[str, int] | str] = {
-                'valid start': "_start", 
-                'data_path': {
-                    'lea': 2, 'mov': 2, 'jmp': 1, 'jb': 1, 'jl': 1, 'ja': 1,
-                    'jg': 1, 'je': 1, 'jne': 1, 'jz': 1, 'js': 1, 'jc': 1, 'jo': 1
-                },
-                'alu': {
-                    'cmp': 2, 'add': 2, 'adc': 2, 'sub': 2, 'sbb': 2, 'inc': 1,
-                    'dec': 1, 'and': 2, 'or': 2, 'xor': 2, 'not': 1, 'neg': 1, 'xchg': 2
-                }, 
-                'fpu': {}
-            }
-            Storage.save_file_dictionary(file_name, data)
-        return file_name
-    
-    @staticmethod
-    def read_valid_start(file_name: str) -> str:
-        """
-        Returns the accepted start declaration according to the settings file.
-        """
-        file_path = Storage._get_path(file_name)
-        with open(file_path, "r") as file:
-            data = json.load(file)
-        return data['valid start']
-    
-    @staticmethod
-    def read_valid_instructions(file_name: str) -> dict[str, dict[str, int]]:
-        """
-        Returns the valid instructions setting from the settings file.
-        """
-        file_path = Storage._get_path(file_name)
-        with open(file_path, "r") as file:
-            data = json.load(file)
-        return {key: value for key, value in data.items() if isinstance(value, dict)}

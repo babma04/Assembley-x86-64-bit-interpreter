@@ -18,7 +18,6 @@ def main():
     :note: Ensure the assembly file exists at the specified path.
     """
     Storage.clean_cache()  # Clean cache before starting
-    validation_file_name: str = Storage.initialize_instructions()     # Update method to enable more instructions
     
     file = get_file()
     argv: list[str] | None = get_args()
@@ -28,8 +27,8 @@ def main():
     else:
         argvcount: int = len(argv)
 
-    loader: Segment_Mapper = Segment_Mapper(file, argvcount, argv, validation_file_name) 
-    cpu: Control_Unit = Control_Unit(loader, validation_file_name, is_debugging()) 
+    loader: Segment_Mapper = Segment_Mapper(file, argvcount, argv) 
+    cpu: Control_Unit = Control_Unit(loader, is_debugging()) 
     print("DEBUG")
     cpu.run()                 
 

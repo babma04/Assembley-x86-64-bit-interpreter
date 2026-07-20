@@ -1,7 +1,7 @@
 import ctypes
 import os
 from bridges.register_manager import Registers_Interface
-import .common_classes
+from .common_classes import Operand, Info
 
 class ALU:
     """

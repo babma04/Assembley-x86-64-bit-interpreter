@@ -1,6 +1,6 @@
 import ctypes
 import os
-import .common_classes
+from .common_classes import Operand, Info
 class FPU:
     def __init__(self, lib_path: str="./libops.so"):
         self.lib = ctypes.CDLL(os.path.abspath(lib_path))

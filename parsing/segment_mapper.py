@@ -5,7 +5,7 @@ from helpers.my_types import DataSectionInfo, BssSectionInfo, LabelMap, Constant
 from bridges.data_memory import Data_Memory
 from bridges.register_manager import Registers_Interface
 
-from parsing.patter_matching_helpers import SIZE_DIRECTIVES, RODATA_BASE, DATA_BASE, BSS_BASE, STACK_START, TOKENS_PATTERN, ELEMENTS_TO_SKIP
+from .patter_matching_helpers import VALID_START, SIZE_DIRECTIVES, RODATA_BASE, DATA_BASE, BSS_BASE, STACK_START, TOKENS_PATTERN, ELEMENTS_TO_SKIP
 
 from exit_codes import ExitCode
 import re
@@ -37,11 +37,11 @@ class Segment_Mapper:
     __slots__ = (
         'stack_limit', 'memory_list', 'rodata_segment', 'data_segment', 
         'bss_segment', 'labels', 'constants', 'file_name', 
-        'memory','valid_start', 'rip', 'registers'
+        'memory', 'rip', 'registers'
     )
 
 
-    def __init__(self, file_name: str, argvcount: int = 0, argv: list[str] | None = None, validation_file_name: str = "valid_instructions.json", stack_limit: int = 0x7fff00000000) -> None:
+    def __init__(self, file_name: str, argvcount: int = 0, argv: list[str] | None = None, stack_limit: int = 0x7fff00000000) -> None:
         """
         Initializes the Segment_Mapper by loading the assembly file, parsing its sections, and setting up memory segments and stack.
 
@@ -58,12 +58,9 @@ class Segment_Mapper:
         # ------------------------
         # Constraints definitions 
         # ------------------------
-
+        
         # Stack limit setting
         self.stack_limit :int = stack_limit
-        # Requires a 'start' label to be changed or will quit the program
-        self.valid_start: str = Storage.read_valid_start(validation_file_name)
-
 
         # ---------------
         # Info holders
@@ -466,18 +463,18 @@ class Segment_Mapper:
                 idx :int = self.find_start(tokens, self.memory_list[index + 1] if index + 1 < len(self.memory_list) else None)
                 match idx:
                     case 0:
-                        self.labels[self.valid_start] = index
+                        self.labels[VALID_START] = index
                         return index
                     case 1:
-                        self.labels[self.valid_start] = index + 1
+                        self.labels[VALID_START] = index + 1
                         return index + 1
                     case -10:
-                        raise SyntaxError(f"Invalid start declaration syntax found. Try removing extra instruction from right after {self.valid_start}!")
+                        raise SyntaxError(f"Invalid start declaration syntax found. Try removing extra instruction from right after {VALID_START}!")
                     # Never reached
                     case _:
                         index += 1
             else:
-                if len(tokens) != 2 or tokens[0] != "global" or tokens[1] != self.valid_start:
+                if len(tokens) != 2 or tokens[0] != "global" or tokens[1] != VALID_START:
                     index += 1
                 else:
                     return index
@@ -499,13 +496,13 @@ class Segment_Mapper:
         if line[0] != "global":
             return -1   # Partial error (meaning no global found and possibly wrong line was passed)
 
-        elif len(line) > 1 and line[1] == self.valid_start:
+        elif len(line) > 1 and line[1] == VALID_START:
             # Extra info on the start declaration that wont be properly parsed
             if len(line) != 2:
                 return -10
             return 0
         
-        elif next_line and  next_line[0] != self.valid_start + ":":
+        elif next_line and  next_line[0] != VALID_START + ":":
             return 1
         
         else: 

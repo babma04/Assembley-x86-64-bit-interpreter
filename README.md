@@ -287,7 +287,7 @@ The application returns the following exit codes to indicate success or specific
    `execution/src/operations.c`.
 2. Add or extend a Functional Unit in `FUs/` to decode the instruction's
    operands and call into the new operation.
-3. Register the instruction in `helper/storage.Storage.initialize_instructions()` so it dispatches to
+3. Register the instruction in `parsing/patter_matching_helpers.py` under **INSTRUCTIONS** so it dispatches to
    the right FU.
 4. Add coverage: a C-level test under `tests/exectuation_tests/`, and a
    Python-level test under `tests/<specific folder>/`
