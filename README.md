@@ -28,9 +28,6 @@ Before using please make sure your code follows the [Code format references](#co
 ## Pipeline
 
 ```text
-## Pipeline
-
-```text
 .asm file
    │
    ▼
