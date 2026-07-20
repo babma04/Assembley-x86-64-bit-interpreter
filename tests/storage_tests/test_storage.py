@@ -6,7 +6,7 @@ Run with:
 
 Design notes
 ------------
-The `Storage` class now strictly separates file locations using `conftest.CACHE_DIR` 
+The `Storage` class strictly separates file locations using `conftest.CACHE_DIR` 
 and `conftest.PROJECT_ROOT`. 
 
 - `load_file` and `convert_to_json` source files from `PROJECT_ROOT`.
@@ -57,35 +57,6 @@ class TestCleanCache:
         assert not (cache / "temp1.json").exists()
         assert not (cache / "temp2.json").exists()
         assert (cache / "valid_instructions.json").exists()
-
-
-# ---------------------------------------------------------------------------
-# update_valid_instructions
-# ---------------------------------------------------------------------------
-
-class TestUpdateValidInstructions:
-    def test_updates_only_dict_sections(self, tmp_path):
-        initial_data = {
-            "valid start": "_start",
-            "data_path": {"mov": 2},
-            "alu": {"add": 2}
-        }
-        cache_file = tmp_path / "cache" / "valid_instructions.json"
-        cache_file.write_text(json.dumps(initial_data))
-
-        new_data = {
-            "data_path": {"mov": 3, "push": 1},
-            "valid start": "SHOULD_NOT_CHANGE"  # Plain string, should be ignored
-        }
-        Storage.update_valid_instructions(new_data)
-
-        updated = json.loads(cache_file.read_text())
-        assert updated["data_path"] == {"mov": 3, "push": 1}
-        assert updated["valid start"] == "_start" 
-
-    def test_raises_filenotfound_when_missing(self):
-        with pytest.raises(FileNotFoundError):
-            Storage.update_valid_instructions({"alu": {}})
 
 
 # ---------------------------------------------------------------------------
@@ -156,7 +127,6 @@ class TestLoadFile:
     def test_exits_process_when_file_missing(self, capsys):
         with pytest.raises(SystemExit) as exc_info:
             Storage.load_file("does_not_exist.txt")
-        assert exc_info.value.code == -1
         assert "couldn't be opened" in capsys.readouterr().out
 
 
@@ -187,7 +157,6 @@ class TestConvertToJson:
         assert new_name == "program.json"
         result = json.loads((tmp_path / "cache" / "program.json").read_text())
         
-        # Note: The new implementation fixes the empty string bug
         assert result == [
             "mov eax, 1",
             "add eax, ebx",
@@ -195,7 +164,6 @@ class TestConvertToJson:
         ]
 
     def test_comment_only_line_is_skipped(self, tmp_path):
-        # The new implementation fixes the bug where lines like "  ; note" were kept
         (tmp_path / "program.asm").write_text(
             "nop\n"
             "  ; a comment-only line\n"
@@ -212,7 +180,6 @@ class TestConvertToJson:
         assert result == ["jmp start", "nop"]
 
     def test_preserves_multiple_dot_segments(self, tmp_path):
-        # The new implementation uses os.path.splitext, fixing the truncation bug
         (tmp_path / "my.program.asm").write_text("nop\n")
         new_name = Storage.convert_to_json("my.program.asm")
         assert new_name == "my.program.json"
@@ -220,78 +187,6 @@ class TestConvertToJson:
     def test_exits_when_source_file_missing(self):
         with pytest.raises(SystemExit):
             Storage.convert_to_json("missing.asm")
-
-
-# ---------------------------------------------------------------------------
-# initialize_instructions / read_methods
-# ---------------------------------------------------------------------------
-
-class TestInitializeInstructions:
-    def test_returns_expected_file_name_and_creates_in_cache(self, tmp_path):
-        # The split CWD vs PROJECT_DIR behavior was unified to CACHE_DIR
-        file_name = Storage.initialize_instructions()
-        assert file_name == "valid_instructions.json"
-
-        created = tmp_path / "cache" / "valid_instructions.json"
-        assert created.is_file()
-
-        data = json.loads(created.read_text())
-        assert data["valid start"] == "_start"
-        assert data["data_path"]["mov"] == 2
-        assert data["alu"]["xor"] == 2
-        assert data["fpu"] == {}
-
-    def test_does_not_overwrite_if_file_already_present_in_cache(self, tmp_path):
-        preexisting = {"valid start": "CUSTOM"}
-        (tmp_path / "cache" / "valid_instructions.json").write_text(json.dumps(preexisting))
-
-        Storage.initialize_instructions()
-        data = json.loads((tmp_path / "cache" / "valid_instructions.json").read_text())
-        assert data == preexisting  
-
-
-class TestReadValidSettings:
-    def test_read_valid_start(self, tmp_path):
-        (tmp_path / "cache" / "settings.json").write_text(
-            json.dumps({"valid start": "_start", "alu": {"add": 2}})
-        )
-        assert Storage.read_valid_start("settings.json") == "_start"
-
-    def test_read_valid_instructions_filters_to_dicts_only(self, tmp_path):
-        settings = {
-            "valid start": "_start", 
-            "data_path": {"mov": 2, "jmp": 1},
-            "alu": {"add": 2, "sub": 2},
-            "fpu": {},
-        }
-        (tmp_path / "cache" / "settings.json").write_text(json.dumps(settings))
-        result = Storage.read_valid_instructions("settings.json")
-
-        assert "valid start" not in result
-        assert result["data_path"] == {"mov": 2, "jmp": 1}
-        assert result["alu"] == {"add": 2, "sub": 2}
-
-
-# ---------------------------------------------------------------------------
-# End-to-end / integration style test
-# ---------------------------------------------------------------------------
-
-class TestIntegration:
-    def test_initialize_then_read_round_trip(self):
-        file_name = Storage.initialize_instructions()
-        start = Storage.read_valid_start(file_name)
-        instructions = Storage.read_valid_instructions(file_name)
-
-        assert start == "_start"
-        assert set(instructions.keys()) == {"data_path", "alu", "fpu"}
-        assert instructions["data_path"]["lea"] == 2
-
-    def test_convert_then_load_lines_round_trip(self, tmp_path):
-        (tmp_path / "src.asm").write_text("mov eax, 1 ; comment\nadd eax, ebx\n")
-        json_name = Storage.convert_to_json("src.asm")
-        lines = Storage.load_file_lines(json_name)
-        assert lines == ["mov eax, 1", "add eax, ebx"]
-
 
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-v"]))

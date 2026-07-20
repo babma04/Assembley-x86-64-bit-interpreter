@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, call
 import sys
 from parsing.segment_mapper import Segment_Mapper
 from exit_codes import ExitCode
@@ -113,7 +113,6 @@ class TestSegmentMapperValidation(unittest.TestCase):
         bad_line = ["buffer", "times", "'A'", "db", "0"]
         self.assertFalse(self.mapper.timed_data_validation(bad_line, "data", "times"))
 
-
     @patch('builtins.print')
     def test_valid_size_calculation(self, mock_print):
         # Base case: valid calculation referencing an existing label
@@ -209,11 +208,13 @@ class TestSegmentMapperTextAndLabelDiscovery(unittest.TestCase):
     @patch.object(Segment_Mapper, '__init__', return_value=None)
     def setUp(self, mock_init):
         self.mapper = Segment_Mapper("dummy.asm")
-        self.mapper.VALID_START = "_start"
+        # Removed `self.mapper.VALID_START = "_start"` to prevent breaking __slots__. 
+        # The mapper reads VALID_START natively from imports.
         self.mapper.labels = {}
         self.mapper.memory_list = []
 
     def test_find_start_return_codes(self):
+        # Uses '_start' natively as expected by pattern matching helpers 
         self.assertEqual(self.mapper.find_start(["global", "_start"], None), 0)
         self.assertEqual(self.mapper.find_start(["global", "other_func"], None), -2)
         self.assertEqual(self.mapper.find_start(["global", "_start", "extra_token"], None), -10)
@@ -287,6 +288,8 @@ class TestSegmentMapperStackIsolationBoundary(unittest.TestCase):
         mapper.memory = MagicMock()
         
         mapper.initialize_stack(argvcount=0, argv=None, memory=mapper.memory, stack_limit=0x1000)
+        
+        # When argv is empty/None, memory.push is called exactly once for argc (0)
         mapper.memory.push.assert_called_once_with((0).to_bytes(8, "little"))
 
 
