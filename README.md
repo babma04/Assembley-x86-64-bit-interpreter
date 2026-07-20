@@ -28,84 +28,93 @@ Before using please make sure your code follows the [Code format references](#co
 ## Pipeline
 
 ```text
-  .asm file
-      │
-      ▼
-┌───────────────────────────┐
-│     segment_mapper.py     │     Phase 1 — mapping
-│ parse → validate → map    │     (runs once, before execution)
-└─────────────┬─────────────┘
-              │  symbol table, memory layout
-              ▼
-┌───────────────────────────┐          Phase 2 — execution loop
-│      control_unit.py      │ ◄────────────────────────────────────┐
-│  fetch → decode → dispatch│                                      │
-└──────┬──────────────▲─────┘                                      │
-       │              │                                            │
-       │              └──────────────────────┐                     │
-       │  decoded instructions               │                     │ (returns control)
-       │  + operands                         │                     │
-       │                                     ▼                     │
-       │                       ┌──────────────────────────┐        | 
-       │                       │     FUs/ (Functional     │ ───────┘
-       │                       │  Units: 1 class per inst)│
-       │                       └─────────┬──────▲─────────┘
-       │                                 │      │
-       │                    calls into C │      │ returns data/state
-       │                                 ▼      │
-       │                       ┌──────────────────────────┐
-       │                       │    bridges/ (ctypes)     │
-       │                       │   register_manager.py    │
-       │                       │      data_memory.py      │
-       │                       └─────────┬──────▲─────────┘
-       │                                 │      │
-       │                 executes logic  │      │ memory/reg updates
-       │                                 ▼      │
-       │                       ┌──────────────────────────┐
-       │                       │      execution/ (C)      │
-       │                       │  registers.c / memory.c  │
-       │                       │       operations.c       │
-       │                       └──────────────────────────┘
-       │
-       │ (loop finishes / exit code triggered)
-       ▼
-┌───────────────────────────────────────┐
-│       Final Interpreter State         │
-│  (CPU state: registers, flags, mem)   │
-└───────────────────────────────────────┘
+## Pipeline
+
+```text
+.asm file
+   │
+   ▼
+┌─────────────────────┐
+│  segment_mapper.py  │     Phase 1 — mapping
+│ parse→validate→map  │     (runs once, before execution)
+└──────────┬──────────┘
+           │ symbol table, memory layout
+           ▼
+ Phase 2 — execution loop
+┌─────────────────────┐       1. raw instruction      ┌───────────────────────┐
+│   control_unit.py   │──────────────────────────────►│ instruction_parser.py │
+│                     │◄──────────────────────────────│ parse&decode operands │
+│      ┌───────┐      │       2. parsed operands      └───────────────────────┘
+│      │ fetch │◄──|  │
+│      └───┬───┘   |  │       3. decoded instruction  ┌───────────────────────┐
+│          ▼       |  │          + operands           │   FUs/ (Functional    │
+│     ┌──────────┐ |  │──────────────────────────────►│   Units execution)    │
+│     │ validate │ |  │                               └──────────┬────────────┘
+│     └────┬─────┘ |  │                                          │ calls C
+│          ▼       |  │                                          ▼
+│     ┌──────────┐ |  │                               ┌───────────────────────┐
+│     │ dispatch │ |  │                               │   bridges/ (ctypes)   │
+│     └────┬─────┘ |  │                               │ register_mgr/data_mem │
+│          │       |  │                               └──────────┬────────────┘
+│          └───────|  |                                          │ memory/reg
+│                     │                                          ▼
+│                     │                               ┌───────────────────────┐
+│                     │ 4. returns control / state    │    execution/ (C)     │
+│                     │◄──────────────────────────────│  registers.c/memory.c │
+└──────────┬──────────┘                               └───────────────────────┘
+           │
+           │ (loop finishes / exit code)
+           ▼
+┌─────────────────────┐
+│  Final Interpreter  │
+│  State (CPU state)  │
+└─────────────────────┘
 ```
 
 ## Project layout
 
-``` text
-CPU_SIMU/
-├── parsing/
-│   ├── segment_mapper.py     # Phase 1: parse, map to memory, validate
-│   └── control_unit.py       # Phase 2: the execution loop
-├── FUs/                      # One class per instruction/instruction family
+## Project layout
+
+```text
+CPU_SIMULATOR/
+├── parsing/                     # Phase 1 & 2 parsing components
+│   ├── segment_mapper.py        # Phase 1: parse, map to memory, validate
+│   ├── control_unit.py          # Phase 2: execution loop & instruction dispatch
+│   ├── instruction_parser.py    # Instruction decoding and operand processing
+│   └── pattern_matching_helpers.py # Regex and token matching utilities
+├── FUs/                         # Functional Units (execution modules)
+│   ├── alu.py                   # Arithmetic Logic Unit implementation
+│   ├── fpu.py                   # Floating Point Unit implementation
+│   ├── data_path.py             # Data path signal routing
+│   └── common_classes.py        # Shared data structures and base FU classes
 ├── bridges/
-│   ├── register_manager.py   # ctypes -> libreg.so
-│   └── data_memory.py        # ctypes -> libmmu.so
+│   ├── register_manager.py      # ctypes -> libreg.so
+│   └── data_memory.py           # ctypes -> libmmu.so
 ├── execution/
-│   ├── include/              # registers.h, memory_eng.h, operations.h
-│   └── src/                  # registers.c, memory_eng.c, operations.c
-├── lib/                      # libreg.so, libmmu.so, liboperations.so (built)
-├── build/                    # intermediate .o files (built)
-├── tests/
-|   ├── asm/                  # dir holding example asm file for testing  
-│   ├── bridge/               # Python bridge test suite
+│   ├── include/                 # registers.h, memory_eng.h, operations.h
+│   └── src/                     # registers.c, memory_eng.c, operations.c
+├── lib/                         # libreg.so, libmmu.so, liboperations.so (built)
+├── build/                       # intermediate .o files (built)
+├── tests/                       # Test suites & resources
+│   ├── asm/                     # Dir holding example asm files for testing
+│   ├── bin/                     # Compiled test binaries/fixtures
+│   ├── bridge/                  # Python bridge test suite
 │   │   ├── test_register_manager.py
 │   │   ├── test_data_memory.py
 │   │   └── test_integration.py
-|   ├── storage_tests/        # Python storing system test suite
-│   └── execution_tests/      # C-level tests
-├── program_cache/            # dir holding processed json files being used
-├── helpers/
-├── conftest.py
-├── exit_codes.py             # ExitCodes enum class holder
-├── Makefile
-├── interpreter.py            # programs class with similar behavior as main
-└── main.py
+│   ├── execution_tests/         # C-level tests
+│   ├── parser/                  # Parser test suite
+│   ├── storage_tests/           # Python storing system test suite
+│   ├── test_cpu.py              # CPU integration test suite
+│   └── test_env.py              # Environment configuration tests
+├── program_cache/               # Dir holding processed json files being used
+├── helpers/                     # Shared utility modules
+├── .gitignore
+├── conftest.py                  # Pytest runner configuration
+├── exit_codes.py                # ExitCodes enum class holder
+├── interpreter.py               # Program's class with similar behavior as main
+├── main.py                      # CLI entry point
+└── Makefile                     # Build targets for C libraries and tests
 ```
 
 ## Building
