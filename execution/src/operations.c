@@ -10,6 +10,28 @@ typedef enum {
     OP_REGISTER
 } OpType;
 
+typedef enum {
+    OP_NULL = -1,
+    // Data Path
+    OP_CMP,
+
+    // ALU
+    OP_ADD,
+    OP_ADC,
+    OP_SUB,
+    OP_SBB,
+    OP_INC,
+    OP_DEC,
+    OP_AND,
+    OP_OR,
+    OP_XOR,
+    OP_NOT,
+    OP_NEG,
+    OP_XCHG,
+
+    OP_COUNT // Sentinel value representing total number of opcodes
+} Opcode;
+
 // Structure for each alu operand's necessary info
 typedef struct Operand{
     long long address;  // virtual address for memory or index for registers
@@ -22,7 +44,7 @@ typedef struct Operand{
 
 // Structure for all necessary instruction info
 struct Info {
-    char *instruction;
+    Opcode opcode;
     Operand op1;
     Operand op2;
     CPURegs *registers;
@@ -62,27 +84,29 @@ static void commit_operand (Info* current_instruction_state, Operand* op, long l
 typedef void (*InstructionFunc)(Info *);
 
 // Instructions link struct
-typedef struct InstructionMap {
-    char *instruction;
-    InstructionFunc func;
-} InstructionMap;
+// Typedef for instruction handler function pointers
+typedef void (*InstructionHandler)(Info*);
 
-// Lookup table to match string instructions with c functions
-InstructionMap dispatch_table[] = {
-    // Data Path (compare)
-    {"cmp",  exec_cmp},
+// Direct O(1) indexed lookup table
+const InstructionHandler dispatch_table[OP_COUNT] = {
+    // Data Path
+    [OP_CMP]  = exec_cmp,
 
     // ALU
-    {"add",  exec_add},  {"adc",  exec_adc},  {"sub",  exec_sub},
-    {"sbb",  exec_sbb},  {"inc",  exec_inc},  {"dec",  exec_dec},
-    {"and",  exec_and},  {"or",   exec_or},   {"xor",  exec_xor},
-    {"not",  exec_not},  {"neg",  exec_neg},  {"xchg", exec_xchg}
-
-    //FPU
-    // To be completed
+    [OP_ADD]  = exec_add,
+    [OP_ADC]  = exec_adc,
+    [OP_SUB]  = exec_sub,
+    [OP_SBB]  = exec_sbb,
+    [OP_INC]  = exec_inc,
+    [OP_DEC]  = exec_dec,
+    [OP_AND]  = exec_and,
+    [OP_OR]   = exec_or,
+    [OP_XOR]  = exec_xor,
+    [OP_NOT]  = exec_not,
+    [OP_NEG]  = exec_neg,
+    [OP_XCHG] = exec_xchg
 };
-// Table size constant
-#define TABLE_SIZE (sizeof(dispatch_table) / sizeof(InstructionMap))
+
 
 // --------------------------------------------------------------------------------
 // Operand fetching, setting and cleaning functions
@@ -128,9 +152,9 @@ void set_operand_info (Info *current_instruction_state, char *operand, long long
     }
 }
 
-void set_instruction (Info *current_instruction_state, char *instruction)
+void set_instruction (Info *current_instruction_state, int instruction)
 {
-    current_instruction_state->instruction = instruction;
+    current_instruction_state->opcode = instruction;
 }
 
 void set_registers_ref (Info *current_state, CPURegs *r)
@@ -173,7 +197,7 @@ void clean(Info *s) {
     memset(&s->op1, 0, sizeof(Operand));
     memset(&s->op2, 0, sizeof(Operand));
     memset(&s->result, 0, sizeof(Operand));
-    s->instruction = NULL;
+    s->opcode = OP_NULL;
     s->res_value = 0;
     s->op1_value = 0;
     s->op2_value = 0;
@@ -183,28 +207,21 @@ void clean(Info *s) {
 // Instruction execution functions
 //--------------------------------
 
-void dispatch(Info *current_instruction_state)
+void dispatch(Info *s)
 {
-    if (!current_instruction_state->instruction) return;
-
-    set_result_info(current_instruction_state);
-    set_operands(current_instruction_state);
+    set_result_info(s);
+    set_operands(s);
     
-    for (int i = 0; i < TABLE_SIZE; i++) {
-        if (strcmp(current_instruction_state->instruction, dispatch_table[i].instruction) == 0) {
-            int is_xchg = (strcmp(current_instruction_state->instruction, "xchg") == 0);
-            dispatch_table[i].func(current_instruction_state);
-            if (!is_xchg) {
-                commit_operand(current_instruction_state, &current_instruction_state->result, current_instruction_state->res_value);
-            }
-            clean(current_instruction_state);
-            return;
-        }
+    Opcode op = s->opcode; 
+
+    uint8_t is_xchg = op == OP_XCHG;
+    dispatch_table[op](s);
+    if (!is_xchg)
+    {
+        commit_operand(s, &s->result, s->res_value);
     }
-    // Should never be reached as in this point the instruction has already been validated
-    printf("Error: Unknown instruction %s\n", current_instruction_state->instruction);
-    // Safety for if an operation ends in an error
-    clean(current_instruction_state);
+    clean(s);
+    return;
 }
 
 // --------------
