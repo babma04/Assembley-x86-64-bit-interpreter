@@ -5,13 +5,17 @@
 // Structures implementations
 // --------------------------------------------------------------------------------
 
+typedef enum {
+    OP_MEMORY,
+    OP_REGISTER
+} OpType;
+
 // Structure for each alu operand's necessary info
 typedef struct Operand{
-    long long address;
-    long long value;
-    uint8_t size; // 1,2,4,8
-    char *op_type;
-    uint8_t visual_rep; // 1 for text, 0 for numerical
+    long long address;  // virtual address for memory or index for registers
+    uint8_t size;       // 1,2,4,8
+    OpType op_type;
+    uint8_t is_high;
 } Operand;
 
 // To be implemented a fpu operand struct
@@ -24,11 +28,17 @@ struct Info {
     CPURegs *registers;
     Table* table;
     Operand result;
+    unsigned long long res_value;
+    unsigned long long op1_value;
+    unsigned long long op2_value;
+
 };
 
 // --------------------------------------------------------------------------------
 // Prototypes
 // --------------------------------------------------------------------------------
+static void set_operands_values(Info* s);
+static unsigned long long get_operand_value(Info* s, Operand* op);
 static void exec_cmp(Info *s); 
 static void exec_add(Info *s); 
 static void exec_adc(Info *s);
@@ -108,18 +118,13 @@ void set_operand_info (Info *current_instruction_state, char *operand, long long
     if (operand != NULL && strcmp(operand, "op1") == 0 )
     {
         current_instruction_state->op1.address = address;
-        current_instruction_state->op1.value = value;
         current_instruction_state->op1.size = size;
         current_instruction_state->op1.op_type = op_type;
-        current_instruction_state->op1.visual_rep = visual_rep;
     } else
     {
         current_instruction_state->op2.address = address;
-        current_instruction_state->op2.value = value;
         current_instruction_state->op2.size = size;
         current_instruction_state->op2.op_type = op_type;
-        current_instruction_state->op2.visual_rep = visual_rep;
-
     }
 }
 
@@ -148,11 +153,10 @@ void set_table_ref (Info *current_state, Table *t)
  */
 static void commit_operand (Info* current_instruction_state, Operand* op, long long value)
 {
-    if (strcmp(op->op_type, "memory") == 0) {
+    if (op->op_type == OP_MEMORY) {
         write_mem(current_instruction_state->table, op->address, (uint8_t*)&value, op->size, 1);
-    } else if (strcmp(op->op_type, "register") == 0) {
-        uint8_t is_high = (op->address <= 3 && op->size == 1);
-        write_reg(current_instruction_state->registers, op->address, value, op->size, is_high);
+    } else if (op->op_type == OP_REGISTER) {
+        write_reg(current_instruction_state->registers, op->address, value, op->size, op->is_high);
     }
     else
     {
@@ -170,6 +174,9 @@ void clean(Info *s) {
     memset(&s->op2, 0, sizeof(Operand));
     memset(&s->result, 0, sizeof(Operand));
     s->instruction = NULL;
+    s->res_value = 0;
+    s->op1_value = 0;
+    s->op2_value = 0;
 }
 
 //--------------------------------
@@ -181,13 +188,14 @@ void dispatch(Info *current_instruction_state)
     if (!current_instruction_state->instruction) return;
 
     set_result_info(current_instruction_state);
+    set_operands(current_instruction_state);
     
     for (int i = 0; i < TABLE_SIZE; i++) {
         if (strcmp(current_instruction_state->instruction, dispatch_table[i].instruction) == 0) {
             int is_xchg = (strcmp(current_instruction_state->instruction, "xchg") == 0);
             dispatch_table[i].func(current_instruction_state);
             if (!is_xchg) {
-                commit_operand(current_instruction_state, &current_instruction_state->result, current_instruction_state->result.value);
+                commit_operand(current_instruction_state, &current_instruction_state->result, current_instruction_state->res_value);
             }
             clean(current_instruction_state);
             return;
@@ -214,7 +222,6 @@ static void set_result_info (Info *current_state)
     current_state->result.op_type = current_state->op1.op_type;
     current_state->result.size = current_state->op1.size;
     current_state->result.address = current_state->op1.address;
-    current_state->result.visual_rep = (current_state->op1.visual_rep || current_state->op2.visual_rep);
 }
 
 
@@ -241,7 +248,7 @@ static void flags_update(Info *s, unsigned long long result)
 
     // Logical flags
     uint8_t carry = (uint8_t) ((result >> bit_count) & 1);
-    uint8_t overflow = (uint8_t) (((s->op1.value ^ result) & (s->op2.value ^ result)) >> msb_mask & 1);
+    uint8_t overflow = (uint8_t) (((s->op1_value ^ result) & (s->op2_value ^ result)) >> msb_mask & 1);
 
     // More flags can be later implemented as needed
 
@@ -251,6 +258,69 @@ static void flags_update(Info *s, unsigned long long result)
     uint32_t rflags_value = (carry << 0) | (zero << 6) | (sign << 7) | (overflow << 11) | (trap << 8);
     write_rflags(s->registers, rflags_value);
 }
+
+// -----------------
+// Value fetching
+// -----------------
+
+/**
+ * @brief Automatically fetches and stores the resolved values for both instruction operands.
+ * 
+ * Evaluates s->op1 and s->op2, saving the extracted values directly into
+ * s->op1_value and s->op2_value respectively.
+ * 
+ * @param s   Pointer to the current instruction Info execution context.
+ */
+static void set_operands_values(Info* s)
+{
+    if (!s) return;
+
+    // Automatically resolve and set both operand values inside the Info struct
+    s->op1_value = get_operand_value(s, &s->op1);
+    s->op2_value = get_operand_value(s, &s->op2);
+}
+
+/**
+ * @brief Reads and returns the masked unsigned 64-bit value for a single operand.
+ * 
+ * Determines whether to read from memory or registers based on op->op_type,
+ * and masks off unused upper bits according to op->size.
+ * 
+ * @param s   Pointer to the current instruction Info execution context.
+ * @param op  Pointer to the Operand struct to evaluate.
+ * @return    The resolved 64-bit unsigned integer value.
+ */
+static unsigned long long get_operand_value(Info* s, Operand* op)
+{
+    if (!s || !op) return 0ULL;
+
+    unsigned long long value = 0ULL;
+
+    switch (op->op_type) {
+        case OP_MEMORY:
+            // Fetch value from memory table
+            read_mem(s->table, op->address, (uint8_t*)&value, op->size);
+            break;
+
+        case OP_REGISTER:
+            // Fetch value from CPU registers 
+            value = read_reg(s->registers, op->address, op->size, op->is_high);
+            break;
+
+        default:
+            // Unknown or unsupported operand type
+            break;
+    }
+
+    // Zero-extend/mask value to guarantee upper bits above op->size are clean
+    if (op->size < 8 && op->size > 0) {
+        unsigned long long mask = (1ULL << (op->size * 8)) - 1ULL;
+        value &= mask;
+    }
+
+    return value;
+}
+
 
 // ----------------------------
 // Main Flux Control function
@@ -265,7 +335,7 @@ static void flags_update(Info *s, unsigned long long result)
 static void exec_cmp(Info *s)
 {
     // Need cmp syntax rules check
-    unsigned long long result = (unsigned long long) s->op1.value - s->op2.value;
+    unsigned long long result = (unsigned long long) s->op1_value - s->op2_value;
     // Sets flags based on the result
     flags_update(s, result);
 }
@@ -282,9 +352,9 @@ static void exec_cmp(Info *s)
  */
 static void exec_add(Info *s)
 {
-    unsigned long long result = (unsigned long long) s->op1.value + s->op2.value;
+    unsigned long long result = (unsigned long long) s->op1_value + s->op2_value;
     flags_update(s, result);
-    s->result.value = (long long) result;
+    s->res_value = (long long) result;
 }
 
 /**
@@ -295,9 +365,9 @@ static void exec_add(Info *s)
  */
 static void exec_adc(Info *s)
 {
-    unsigned long long result = (unsigned long long) s->op1.value + s->op2.value + read_carry_flag(s->registers);
+    unsigned long long result = (unsigned long long) s->op1_value + s->op2_value + read_carry_flag(s->registers);
     flags_update(s, result);
-    s->result.value = (long long) result;
+    s->res_value = (long long) result;
 }
 
 /**
@@ -308,9 +378,9 @@ static void exec_adc(Info *s)
  */
 static void exec_sub(Info *s)
 {
-    unsigned long long result = (unsigned long long) s->op1.value - s->op2.value;
+    unsigned long long result = (unsigned long long) s->op1_value - s->op2_value;
     flags_update(s, result);
-    s->result.value = (long long) result;
+    s->res_value = (long long) result;
 }
 
 /**
@@ -321,9 +391,9 @@ static void exec_sub(Info *s)
  */
 static void exec_sbb(Info *s)
 {
-    unsigned long long result = (unsigned long long) s->op1.value - s->op2.value - read_carry_flag(s->registers);
+    unsigned long long result = (unsigned long long) s->op1_value - s->op2_value - read_carry_flag(s->registers);
     flags_update(s, result);
-    s->result.value = (long long) result;
+    s->res_value = (long long) result;
 }
 
 /**
@@ -334,9 +404,9 @@ static void exec_sbb(Info *s)
  */
 static void exec_inc(Info *s)
 {
-    unsigned long long result = (unsigned long long) s->op1.value + 1;
+    unsigned long long result = (unsigned long long) s->op1_value + 1;
     flags_update(s, result);
-    s->result.value = (long long) result;
+    s->res_value = (long long) result;
 }
 
 /**
@@ -347,9 +417,9 @@ static void exec_inc(Info *s)
  */
 static void exec_dec(Info *s)
 {
-    unsigned long long result = (unsigned long long) s->op1.value - 1;
+    unsigned long long result = (unsigned long long) s->op1_value - 1;
     flags_update(s, result);
-    s->result.value = (long long) result;
+    s->res_value = (long long) result;
 }
 
 /**
@@ -360,9 +430,9 @@ static void exec_dec(Info *s)
  */
 static void exec_and(Info *s)
 {
-    unsigned long long result = (unsigned long long) s->op1.value & s->op2.value;
+    unsigned long long result = (unsigned long long) s->op1_value & s->op2_value;
     flags_update(s, result);
-    s->result.value = (long long) result;
+    s->res_value = (long long) result;
 }
 
 /**
@@ -373,9 +443,9 @@ static void exec_and(Info *s)
  */
 static void exec_or(Info *s)
 {
-    unsigned long long result = (unsigned long long) s->op1.value | s->op2.value;
+    unsigned long long result = (unsigned long long) s->op1_value | s->op2_value;
     flags_update(s, result);
-    s->result.value = (long long) result;
+    s->res_value = (long long) result;
 }
 
 /**
@@ -386,9 +456,9 @@ static void exec_or(Info *s)
  */
 static void exec_xor(Info *s)
 {
-    unsigned long long result = (unsigned long long) s->op1.value ^ s->op2.value;
+    unsigned long long result = (unsigned long long) s->op1_value ^ s->op2_value;
     flags_update(s, result);
-    s->result.value = (long long) result;
+    s->res_value = (long long) result;
 }
 
 /**
@@ -399,9 +469,9 @@ static void exec_xor(Info *s)
  */
 static void exec_not(Info *s)
 {
-    unsigned long long result = (unsigned long long) ~s->op1.value;
+    unsigned long long result = (unsigned long long) ~s->op1_value;
     flags_update(s, result);
-    s->result.value = (long long) result;
+    s->res_value = (long long) result;
 }
 
 /**
@@ -412,9 +482,9 @@ static void exec_not(Info *s)
  */
 static void exec_neg(Info *s)
 {
-    unsigned long long result = (unsigned long long) -s->op1.value;
+    unsigned long long result = (unsigned long long) -s->op1_value;
     flags_update(s, result);
-    s->result.value = (long long) result;
+    s->res_value = (long long) result;
 }
 
 /**
@@ -426,8 +496,8 @@ static void exec_neg(Info *s)
 static void exec_xchg(Info *s)
 {
     // Fetches each value
-    long long val1 = s->op1.value;
-    long long val2 = s->op2.value;
+    long long val1 = s->op1_value;
+    long long val2 = s->op2_value;
     // commits each value
     commit_operand(s, &s->op1, val2);
     commit_operand(s, &s->op2, val1);

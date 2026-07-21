@@ -1,68 +1,93 @@
 import ctypes
 import os
+
 from bridges.register_manager import Registers_Interface
+from bridges.data_memory import Data_Memory
+
 from .common_classes import Operand, Info
 
+from parsing.instruction_parser import Operand as OP
+from conftest import PROJECT_ROOT
+
 class ALU:
-    """
-    
-    """
 
-    def __init__(self, register: Registers_Interface, libops_path: str="./liboperations.so") -> None:
-        self.libops = ctypes.CDLL(os.path.abspath(libops_path))
-        self.result: int | None = None
-        self.register = register
+    __slots__ = ["lib", "state"]
 
-        # Define C return and args types
-        self.libops.get_operand_info.argtypes = [
-            ctypes.c_char_p, ctypes.c_int, ctypes.c_int64, 
-            ctypes.c_int, ctypes.c_char_p
+    def __init__(self, registers: Registers_Interface, memory: Data_Memory, libops_path: str=os.path.join(PROJECT_ROOT, "lib/liboperations.so")) -> None:
+        self.lib = ctypes.CDLL(os.path.abspath(libops_path))
+
+        self.lib.create_operand_state.argtypes = []
+        self.lib.create_operand_state.restype = ctypes.c_void_p
+
+        self.lib.free_operand_state.argtypes = [ctypes.c_void_p]
+        self.lib.free_operand_state.restype = None
+
+        self.lib.set_registers_ref.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+        self.lib.set_registers_ref.restype = None
+
+        self.lib.set_table_ref.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+        self.lib.set_table_ref.restype = None
+
+        self.lib.set_operand_info.argtypes = [
+            ctypes.c_void_p,      # Info*
+            ctypes.c_char_p,      # operand ("op1" / "op2")
+            ctypes.c_longlong,    # address
+            ctypes.c_longlong,    # value
+            ctypes.c_uint8,       # size
+            ctypes.c_char_p,      # op_type
         ]
-        self.libops.set_instruction.argtypes = [ctypes.c_char_p]
-        self.libops.clean.argtypes = []
-        self.libops.dispatch.argtypes = []
-        
-    def load_values(self, instruction: str, op1_value: int, op1_address: int | None, op1_type: str | None, op1_size: int, op2_value: int, op2_address: int | None, op2_type: str | None, op2_size: int) -> None:
+        self.lib.set_operand_info.restype = None
+
+        self.lib.set_instruction.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
+        self.lib.set_instruction.restype = None
+
+        self.lib.clean.argtypes = [ctypes.c_void_p]
+        self.lib.clean.restype = None
+
+        self.lib.dispatch.argtypes = [ctypes.c_void_p]
+        self.lib.dispatch.restype = None
+
+        # Prepares all needed info
+        self.state = self.lib.create_operand_state()
+        self.lib.set_registers_ref(self.state, registers)
+        self.lib.set_table_ref(self.state, memory)
+
+
+    def __del__(self) -> None:
+        # Best-effort: free the C-side struct once this ALU is collected.
+        state = getattr(self, "state", None)
+        lib = getattr(self, "lib", None)
+        if state and lib:
+            lib.free_operand_state(state)
+
+    def load_values(self, instruction: str, op1: OP, op2: OP) -> None:
         """
         Initializes the c structure in operations.c
-        
+
         :param instruction: Instruction to do
-        :type instrution: str
-        :param op1_value: Value of the source operand
-        :type op1_value: int
-        :param op1_address: Address of the source operand if any
-        :type op1_address: int | None
-        :param op1_type: Operand type of the source operand if it exists
-        :type op1_type: str | None
-        :param op1_size: Number of bytes the source operand takes
-        :type op1_size: int
-        :param op2_value: Value of the destination operand
-        :type op2_value: int
-        :param op2_address: Address of the destination operand if any
-        :type op2_address: int | None
-        :param op2_type: Operand type of the destination operand if it exists
-        :type op2_type: str | None
-        :param op2_size: Number of bytes the destination operand takes
-        :type op2_size: int
+        :type instruction: str
+        :param op1: Operand obj for the first operand
+        :param op2: Operand obj for the second operand
         """
-        self.libops.set_instruction(instruction)
-        if op1_type != None:
-            self.libops.get_operand_info("op1", op1_address, op1_value, op1_size, op1_type.split(" ")[1])
-        if op2_type != None:
-            self.libops.get_operand_info("op2", op2_address, op2_value, op2_size, op2_type.split(" ")[1])
-    
+        self.lib.clean(self.state)
+        self.lib.set_instruction(self.state, instruction.encode())
+
+        if op1.is_valid():
+            self.lib.set_operand_info(
+                self.state, b"op1",
+                op1.address, op1.address, op1.size,
+                op1.type
+            )
+
+        if op2.is_valid():
+            self.lib.set_operand_info(
+                self.state, b"op2",
+                op2.address, op2.address, op2.size,
+                op2.type
+            )
+
     def execute(self) -> None:
         """
-        Executes the instruction loaded in the c structure and updates the result attribute with the result of the operation if it exists.
-        :param op1_expression: Expression of the first operand to check if the result should be updated with the value of the first operand
-        :type op1_expression: str
+        Executes the instruction loaded in the c structure.
         """
-        self.libops.dispatch()
-        current_instruction_state = self.libops.get_current_instruction_state()
-        # If the result is a register, update the result attribute with the value of the register (Only registers should be handled since memory operands are directly written to memory in the c code)
-        if current_instruction_state.result.op_type != None and current_instruction_state.result.op_type.decode() == "register":
-            self.result = current_instruction_state.result.value           
-        
-
-    
-        
+        self.lib.dispatch(self.state)
