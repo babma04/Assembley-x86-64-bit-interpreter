@@ -86,15 +86,16 @@ class Registers_Interface:
         self.lib.read_rflags.argtypes = [ctypes.c_void_p]
         self.lib.read_rflags.restype = ctypes.c_uint32
         self.lib.read_trap_flag.argtypes = [ctypes.c_void_p]
-        self.lib.read_trap_flag.restype = ctypes.c_int
+        self.lib.read_trap_flag.restype = ctypes.c_uint8
         self.lib.read_carry_flag.argtypes = [ctypes.c_void_p]
-        self.lib.read_carry_flag.restype = ctypes.c_int
+        self.lib.read_carry_flag.restype = ctypes.c_uint8
         self.lib.read_zero_flag.argtypes = [ctypes.c_void_p]
-        self.lib.read_zero_flag.restype = ctypes.c_int
+        self.lib.read_zero_flag.restype = ctypes.c_uint8
         self.lib.read_sign_flag.argtypes = [ctypes.c_void_p]
-        self.lib.read_sign_flag.restype = ctypes.c_int
+        self.lib.read_sign_flag.restype = ctypes.c_uint8
         self.lib.read_overflow_flag.argtypes = [ctypes.c_void_p]
-        self.lib.read_overflow_flag.restype = ctypes.c_int
+        self.lib.read_overflow_flag.restype = ctypes.c_uint8
+        self.lib.read_parity_flag.restype = ctypes.c_uint8
         self.lib.write_rflags.argtypes = [
             ctypes.c_void_p,
             ctypes.c_uint32                 # value
@@ -314,6 +315,13 @@ class Registers_Interface:
         Reads the value of the sign flag in the c structure file and returns its value as a bool
         """
         return True if int(self.lib.read_sign_flag(self.regs)) == 1 else False
+
+    def read_parity(self) -> bool:
+        """
+        Reads the value of the parity flag in the c structure file and returns its value as a bool
+        """
+        return True if int(self.lib.read_parity_flag(self.regs)) == 1 else False
+
 
     def exch_flag(self, flag_id: int) -> None:
         """

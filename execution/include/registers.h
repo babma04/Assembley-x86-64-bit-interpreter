@@ -114,7 +114,7 @@ uint32_t read_rflags (CPURegs *current_state);
  * @param current_state Holder of the register structures
  * @return 1 if the trap flag is set, 0 otherwise
  */
-int read_trap_flag (CPURegs *current_state);
+uint8_t read_trap_flag (CPURegs *current_state);
 
 /**
  * @brief Returns the value of the carry flag (CF) in the rflags register.
@@ -122,7 +122,7 @@ int read_trap_flag (CPURegs *current_state);
  * @param current_state Holder of the register structures
  * @return 1 if the carry flag is set, 0 otherwise
  */
-int read_carry_flag (CPURegs *current_state);
+uint8_t read_carry_flag (CPURegs *current_state);
 
 /**
  * @brief Returns the value of the zero flag (ZF) in the rflags register.
@@ -130,7 +130,7 @@ int read_carry_flag (CPURegs *current_state);
  * @param current_state Holder of the register structures
  * @return 1 if the zero flag is set, 0 otherwise
  */
-int read_zero_flag (CPURegs *current_state);
+uint8_t read_zero_flag (CPURegs *current_state);
 
 /**
  * @brief Returns the value of the sign flag (SF) in the rflags register.
@@ -138,7 +138,7 @@ int read_zero_flag (CPURegs *current_state);
  * @param current_state Holder of the register structures
  * @return 1 if the sign flag is set, 0 otherwise
  */
-int read_sign_flag (CPURegs *current_state);
+uint8_t read_sign_flag (CPURegs *current_state);
 
 /**
  * @brief Returns the value of the overflow flag (OF) in the rflags register.
@@ -146,7 +146,15 @@ int read_sign_flag (CPURegs *current_state);
  * @param current_state Holder of the register structures
  * @return 1 if the overflow flag is set, 0 otherwise
  */
-int read_overflow_flag (CPURegs *current_state);
+uint8_t read_overflow_flag (CPURegs *current_state);
+
+/**
+ * @brief Returns the value of the parity flag (PF) in the rflags register.
+ * 
+ * @param current_state Holder of the register structures
+ * @return 1 if the parity flag is set, 0 otherwise
+ */
+uint8_t read_parity_flag (CPURegs* current_state);
 
 /**
  * @brief Writes a value to the rflags register.

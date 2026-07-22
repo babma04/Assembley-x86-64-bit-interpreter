@@ -245,6 +245,20 @@ TEST(test_overflow_flag) {
     CPURegs_free(r);
 }
 
+TEST(test_parity_flag) {
+    CPURegs *r = CPURegs_create();
+    
+    // Set Parity Flag (bit 2 -> 0x4)
+    write_rflags(r, read_rflags(r) | 0x4);
+    ASSERT(read_parity_flag(r) != 0);
+    
+    // Clear Parity Flag
+    write_rflags(r, read_rflags(r) & ~0x4);
+    ASSERT(read_parity_flag(r) == 0);
+    
+    CPURegs_free(r);
+}
+
 TEST(test_trap_flag_toggle) {
     CPURegs *r = CPURegs_create();
     
@@ -299,6 +313,7 @@ int main(void) {
     RUN(test_read_rflags_no_crash);
     RUN(test_write_read_rflags);
     RUN(test_carry_flag);
+    RUN(test_parity_flag);
     RUN(test_zero_flag);
     RUN(test_sign_flag);
     RUN(test_overflow_flag);

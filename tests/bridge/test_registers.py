@@ -207,6 +207,7 @@ class TestFlags:
         ("read_zero_flag", "read_zero"),
         ("read_sign_flag", "read_sign"),
         ("read_overflow_flag", "read_overflow"),
+        ("read_parity_flag", "read_parity"),
         ("read_trap_flag", "read_trap_flag"),
     ])
     def test_bool_flags_true(self, regs, fn_name, method_name):
@@ -218,6 +219,7 @@ class TestFlags:
         ("read_zero_flag", "read_zero"),
         ("read_sign_flag", "read_sign"),
         ("read_overflow_flag", "read_overflow"),
+        ("read_parity_flag", "read_parity"),
         ("read_trap_flag", "read_trap_flag"),
     ])
     def test_bool_flags_false(self, regs, fn_name, method_name):

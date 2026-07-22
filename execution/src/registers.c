@@ -98,11 +98,12 @@ uint8_t read_1b_reg(CPURegs *current_state, uint8_t reg_id, uint8_t is_high) {
 uint32_t read_rflags(CPURegs *current_state) { return current_state ? current_state->rflags : 0; }
 void write_rflags(CPURegs *current_state, uint32_t value) { if (current_state) current_state->rflags = value; }
 
-int read_trap_flag(CPURegs *current_state)     { return (read_rflags(current_state) >> 8) & 0x1; }
-int read_carry_flag(CPURegs *current_state)    { return (read_rflags(current_state) & 0x1); }
-int read_zero_flag(CPURegs *current_state)     { return (read_rflags(current_state) >> 6) & 0x1; }
-int read_sign_flag(CPURegs *current_state)     { return (read_rflags(current_state) >> 7) & 0x1; }
-int read_overflow_flag(CPURegs *current_state) { return (read_rflags(current_state) >> 11) & 0x1; }
+uint8_t read_trap_flag(CPURegs *current_state)     { return (read_rflags(current_state) >> 8) & 0x1; }
+uint8_t read_carry_flag(CPURegs *current_state)    { return (read_rflags(current_state) & 0x1); }
+uint8_t read_zero_flag(CPURegs *current_state)     { return (read_rflags(current_state) >> 6) & 0x1; }
+uint8_t read_sign_flag(CPURegs *current_state)     { return (read_rflags(current_state) >> 7) & 0x1; }
+uint8_t read_overflow_flag(CPURegs *current_state) { return (read_rflags(current_state) >> 11) & 0x1; }
+uint8_t read_parity_flag(CPURegs *current_state)   { return (read_rflags(current_state) >> 2) & 0x1; }
 
 void exch_rflag (CPURegs *current_state, uint8_t flag_id) {
     if (flag_id > 31 || !current_state) return;
