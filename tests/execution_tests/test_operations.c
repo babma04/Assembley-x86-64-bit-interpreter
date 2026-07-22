@@ -64,8 +64,16 @@ static void destroy_info(Info *info, CPURegs *regs, Table *table)
 #define REG_B  1
 #define REG_C  2
 
+static void set64(CPURegs *r, uint8_t reg, uint64_t v) {
+    write_reg(r, reg, (int64_t)v, 8, 0);
+}
+
+static uint64_t get64(CPURegs *r, uint8_t reg) {
+    return read_8b_reg(r, reg);
+}
+
 // -----------------------------------------------------------------------
-// Tests — lifecycle
+// Tests — lifecycle & state management
 // -----------------------------------------------------------------------
 
 TEST(test_create_operand_state_not_null) {
@@ -101,22 +109,22 @@ TEST(test_set_table_ref_no_crash) {
 TEST(test_set_instruction_no_crash) {
     Info *info = create_operand_state();
     ASSERT(info != NULL);
-    set_instruction(info, "add");
+    set_instruction(info, OP_ADD);
     free_operand_state(info);
 }
 
 TEST(test_set_operand_info_no_crash) {
     Info *info = create_operand_state();
     ASSERT(info != NULL);
-    // FIXED: using "op1" and "register" 
-    set_operand_info(info, "op1", REG_A, 42LL, 8, "register", 1);
+    // Updated: matches set_operand_info signature with OpType enum and is_signed parameter
+    set_operand_info(info, "op1", REG_A, 8, OP_REGISTER, 0, 0);
     free_operand_state(info);
 }
 
 TEST(test_clean_no_crash) {
     Info *info = create_operand_state();
     ASSERT(info != NULL);
-    set_instruction(info, "add");
+    set_instruction(info, OP_ADD);
     clean(info);
     free_operand_state(info);
 }
@@ -124,22 +132,15 @@ TEST(test_clean_no_crash) {
 TEST(test_reuse_after_clean) {
     Info *info = create_operand_state();
     ASSERT(info != NULL);
-    set_instruction(info, "add");
+    set_instruction(info, OP_ADD);
     clean(info);
-    set_instruction(info, "sub");
+    set_instruction(info, OP_SUB);
     free_operand_state(info);
 }
 
 // -----------------------------------------------------------------------
 // Tests — dispatch with ALU operations
 // -----------------------------------------------------------------------
-
-static void set64(CPURegs *r, uint8_t reg, uint64_t v) {
-    write_reg(r, reg, (int64_t)v, 8, 0);
-}
-static uint64_t get64(CPURegs *r, uint8_t reg) {
-    return read_8b_reg(r, reg);
-}
 
 TEST(test_dispatch_add) {
     CPURegs *regs; Table *table;
@@ -149,10 +150,9 @@ TEST(test_dispatch_add) {
     set64(regs, REG_A, 10);
     set64(regs, REG_B, 32);
 
-    set_instruction(info, "add");
-    // FIXED: Explicit "op1"/"op2", target addresses REG_A/REG_B, and type "register"
-    set_operand_info(info, "op1", REG_A, 10LL, 8, "register", 1);
-    set_operand_info(info, "op2", REG_B, 32LL, 8, "register", 1);
+    set_instruction(info, OP_ADD);
+    set_operand_info(info, "op1", REG_A, 8, OP_REGISTER, 0, 0);
+    set_operand_info(info, "op2", REG_B, 8, OP_REGISTER, 0, 0);
 
     dispatch(info);
 
@@ -168,9 +168,9 @@ TEST(test_dispatch_sub) {
     set64(regs, REG_A, 100);
     set64(regs, REG_B, 58);
 
-    set_instruction(info, "sub");
-    set_operand_info(info, "op1", REG_A, 100LL, 8, "register", 1);
-    set_operand_info(info, "op2", REG_B, 58LL, 8, "register", 1);
+    set_instruction(info, OP_SUB);
+    set_operand_info(info, "op1", REG_A, 8, OP_REGISTER, 0, 0);
+    set_operand_info(info, "op2", REG_B, 8, OP_REGISTER, 0, 0);
 
     dispatch(info);
 
@@ -186,9 +186,9 @@ TEST(test_dispatch_and) {
     set64(regs, REG_A, 0xFF);
     set64(regs, REG_B, 0x0F);
 
-    set_instruction(info, "and");
-    set_operand_info(info, "op1", REG_A, 0xFFLL, 8, "register", 1);
-    set_operand_info(info, "op2", REG_B, 0x0FLL, 8, "register", 1);
+    set_instruction(info, OP_AND);
+    set_operand_info(info, "op1", REG_A, 8, OP_REGISTER, 0, 0);
+    set_operand_info(info, "op2", REG_B, 8, OP_REGISTER, 0, 0);
 
     dispatch(info);
 
@@ -204,9 +204,9 @@ TEST(test_dispatch_or) {
     set64(regs, REG_A, 0xF0);
     set64(regs, REG_B, 0x0F);
 
-    set_instruction(info, "or");
-    set_operand_info(info, "op1", REG_A, 0xF0LL, 8, "register", 1);
-    set_operand_info(info, "op2", REG_B, 0x0FLL, 8, "register", 1);
+    set_instruction(info, OP_OR);
+    set_operand_info(info, "op1", REG_A, 8, OP_REGISTER, 0, 0);
+    set_operand_info(info, "op2", REG_B, 8, OP_REGISTER, 0, 0);
 
     dispatch(info);
 
@@ -221,9 +221,9 @@ TEST(test_dispatch_xor_self) {
 
     set64(regs, REG_A, 0xDEADBEEF);
 
-    set_instruction(info, "xor");
-    set_operand_info(info, "op1", REG_A, 0xDEADBEEFLL, 8, "register", 1);
-    set_operand_info(info, "op2", REG_A, 0xDEADBEEFLL, 8, "register", 1);
+    set_instruction(info, OP_XOR);
+    set_operand_info(info, "op1", REG_A, 8, OP_REGISTER, 0, 0);
+    set_operand_info(info, "op2", REG_A, 8, OP_REGISTER, 0, 0);
 
     dispatch(info);
 
@@ -231,7 +231,6 @@ TEST(test_dispatch_xor_self) {
     destroy_info(info, regs, table);
 }
 
-// 14. NEW TEST: XCHG — Tests multi-operand commits
 TEST(test_dispatch_xchg) {
     CPURegs *regs; Table *table;
     Info *info = make_info(&regs, &table);
@@ -240,16 +239,79 @@ TEST(test_dispatch_xchg) {
     set64(regs, REG_A, 0x1111);
     set64(regs, REG_B, 0x9999);
 
-    set_instruction(info, "xchg");
-    set_operand_info(info, "op1", REG_A, 0x1111LL, 8, "register", 1);
-    set_operand_info(info, "op2", REG_B, 0x9999LL, 8, "register", 1);
+    set_instruction(info, OP_XCHG);
+    set_operand_info(info, "op1", REG_A, 8, OP_REGISTER, 0, 0);
+    set_operand_info(info, "op2", REG_B, 8, OP_REGISTER, 0, 0);
 
     dispatch(info);
 
-    // Validate the swap occurred securely in the register file
     ASSERT(get64(regs, REG_A) == 0x9999);
     ASSERT(get64(regs, REG_B) == 0x1111);
 
+    destroy_info(info, regs, table);
+}
+
+TEST(test_dispatch_inc) {
+    CPURegs *regs; Table *table;
+    Info *info = make_info(&regs, &table);
+    ASSERT(info != NULL);
+
+    set64(regs, REG_A, 41);
+
+    set_instruction(info, OP_INC);
+    set_operand_info(info, "op1", REG_A, 8, OP_REGISTER, 0, 0);
+
+    dispatch(info);
+
+    ASSERT(get64(regs, REG_A) == 42);
+    destroy_info(info, regs, table);
+}
+
+TEST(test_dispatch_dec) {
+    CPURegs *regs; Table *table;
+    Info *info = make_info(&regs, &table);
+    ASSERT(info != NULL);
+
+    set64(regs, REG_A, 43);
+
+    set_instruction(info, OP_DEC);
+    set_operand_info(info, "op1", REG_A, 8, OP_REGISTER, 0, 0);
+
+    dispatch(info);
+
+    ASSERT(get64(regs, REG_A) == 42);
+    destroy_info(info, regs, table);
+}
+
+TEST(test_dispatch_not) {
+    CPURegs *regs; Table *table;
+    Info *info = make_info(&regs, &table);
+    ASSERT(info != NULL);
+
+    set64(regs, REG_A, 0x00000000FFFFFFFFULL);
+
+    set_instruction(info, OP_NOT);
+    set_operand_info(info, "op1", REG_A, 8, OP_REGISTER, 0, 0);
+
+    dispatch(info);
+
+    ASSERT(get64(regs, REG_A) == 0xFFFFFFFF00000000ULL);
+    destroy_info(info, regs, table);
+}
+
+TEST(test_dispatch_neg) {
+    CPURegs *regs; Table *table;
+    Info *info = make_info(&regs, &table);
+    ASSERT(info != NULL);
+
+    set64(regs, REG_A, 5);
+
+    set_instruction(info, OP_NEG);
+    set_operand_info(info, "op1", REG_A, 8, OP_REGISTER, 0, 1);
+
+    dispatch(info);
+
+    ASSERT((int64_t)get64(regs, REG_A) == -5);
     destroy_info(info, regs, table);
 }
 
@@ -261,9 +323,9 @@ TEST(test_dispatch_add_sets_zero_flag) {
     set64(regs, REG_A, (uint64_t)-1LL); 
     set64(regs, REG_B, 1);
 
-    set_instruction(info, "add");
-    set_operand_info(info, "op1", REG_A, (long long)-1LL, 8, "register", 1);
-    set_operand_info(info, "op2", REG_B, 1LL, 8, "register", 1);
+    set_instruction(info, OP_ADD);
+    set_operand_info(info, "op1", REG_A, 8, OP_REGISTER, 0, 0);
+    set_operand_info(info, "op2", REG_B, 8, OP_REGISTER, 0, 0);
 
     dispatch(info);
 
@@ -279,9 +341,9 @@ TEST(test_dispatch_sub_sets_zero_flag) {
     set64(regs, REG_A, 77);
     set64(regs, REG_B, 77);
 
-    set_instruction(info, "sub");
-    set_operand_info(info, "op1", REG_A, 77LL, 8, "register", 1);
-    set_operand_info(info, "op2", REG_B, 77LL, 8, "register", 1);
+    set_instruction(info, OP_SUB);
+    set_operand_info(info, "op1", REG_A, 8, OP_REGISTER, 0, 0);
+    set_operand_info(info, "op2", REG_B, 8, OP_REGISTER, 0, 0);
 
     dispatch(info);
 
@@ -296,19 +358,18 @@ TEST(test_dispatch_clean_between_instructions) {
 
     set64(regs, REG_A, 5);
     set64(regs, REG_B, 3);
-    set_instruction(info, "add");
-    set_operand_info(info, "op1", REG_A, 5LL, 8, "register", 1);
-    set_operand_info(info, "op2", REG_B, 3LL, 8, "register", 1);
+    set_instruction(info, OP_ADD);
+    set_operand_info(info, "op1", REG_A, 8, OP_REGISTER, 0, 0);
+    set_operand_info(info, "op2", REG_B, 8, OP_REGISTER, 0, 0);
     dispatch(info);
     ASSERT(get64(regs, REG_A) == 8);
 
     clean(info);
 
-    // FIXED: Use an operation you have implemented like XOR to zero it out, rather than mov
     set64(regs, REG_A, 99);
-    set_instruction(info, "xor");
-    set_operand_info(info, "op1", REG_A, 99LL, 8, "register", 1);
-    set_operand_info(info, "op2", REG_A, 99LL, 8, "register", 1);
+    set_instruction(info, OP_XOR);
+    set_operand_info(info, "op1", REG_A, 8, OP_REGISTER, 0, 0);
+    set_operand_info(info, "op2", REG_A, 8, OP_REGISTER, 0, 0);
     dispatch(info);
     ASSERT(get64(regs, REG_A) == 0);
 
@@ -338,6 +399,10 @@ int main(void)
     RUN(test_dispatch_or);
     RUN(test_dispatch_xor_self);
     RUN(test_dispatch_xchg);
+    RUN(test_dispatch_inc);
+    RUN(test_dispatch_dec);
+    RUN(test_dispatch_not);
+    RUN(test_dispatch_neg);
     RUN(test_dispatch_add_sets_zero_flag);
     RUN(test_dispatch_sub_sets_zero_flag);
     RUN(test_dispatch_clean_between_instructions);

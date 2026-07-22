@@ -5,35 +5,6 @@
 // Structures implementations
 // --------------------------------------------------------------------------------
 
-typedef enum {
-    OP_MEMORY,
-    OP_REGISTER,
-    OP_IMMEDIATE
-} OpType;
-
-typedef enum {
-    OP_NULL = -1,
-    
-    // ALU
-    OP_CMP,
-    OP_ADD,
-    OP_ADC,
-    OP_SUB,
-    OP_SBB,
-    OP_INC,
-    OP_DEC,
-    OP_AND,
-    OP_OR,
-    OP_XOR,
-    OP_NOT,
-    OP_NEG,
-    OP_XCHG,
-    
-    // FPU
-    // TO IMPLEMENT LATER
-    OP_COUNT // Sentinel value representing total number of opcodes
-} Opcode;
-
 // Structure for each alu operand's necessary info
 typedef struct Operand{
     long long address;  // virtual address for memory or index for registers
@@ -326,7 +297,8 @@ static unsigned long long get_operand_value(Info *s, Operand *op)
 
     unsigned long long value = 0ULL;
 
-    switch (op->op_type) {
+    switch (op->op_type) 
+    {
         case OP_MEMORY:
             // Fetch value from memory table
             read_mem(s->table, op->address, (uint8_t*)&value, op->size);
@@ -334,7 +306,19 @@ static unsigned long long get_operand_value(Info *s, Operand *op)
 
         case OP_REGISTER:
             // Fetch value from CPU registers 
-            value = read_reg(s->registers, op->address, op->size, op->is_high);
+            switch (op->size)
+            {
+                case 1:
+                    value = (unsigned long long) read_1b_reg(s->registers, op->address, op->is_high);
+                case 2:
+                    value = (unsigned long long)  read_2b_reg(s->registers, op->address);
+                case 4:
+                    value = (unsigned long long)  read_4b_reg(s->registers, op->address);
+                case 8:
+                    value = (unsigned long long)  read_8b_reg(s->registers, op->address);
+                default:
+                    value = 0;
+            }
             break;
 
         default:

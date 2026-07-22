@@ -19,6 +19,35 @@
 // Operation Info structure
 typedef struct Info Info;
 
+typedef enum {
+    OP_MEMORY,
+    OP_REGISTER,
+    OP_IMMEDIATE
+} OpType;
+
+typedef enum {
+    OP_NULL = -1,
+    
+    // ALU
+    OP_CMP,
+    OP_ADD,
+    OP_ADC,
+    OP_SUB,
+    OP_SBB,
+    OP_INC,
+    OP_DEC,
+    OP_AND,
+    OP_OR,
+    OP_XOR,
+    OP_NOT,
+    OP_NEG,
+    OP_XCHG,
+    
+    // FPU
+    // TO IMPLEMENT LATER
+    OP_COUNT // Sentinel value representing total number of opcodes
+} Opcode;
+
 // ---------------------------------------------------
 // Prototypes
 // ---------------------------------------------------
@@ -44,7 +73,7 @@ void free_operand_state (Info* ptr);
  * @brief Sets the register reference to use for operations.
  * 
  * @param current_state Pointer to the Info structure holding all operand, instruction result and registers info
- * @param r Register structure holding all register info 
+ * @param r             Register structure holding all register info 
  */ 
 void set_registers_ref (Info *current_state, CPURegs *r);
 
@@ -52,7 +81,7 @@ void set_registers_ref (Info *current_state, CPURegs *r);
  * @brief Sets the table reference to use for memory access operations.
  * 
  * @param current_state Pointer to the Info structure holding all operand, instruction result and registers info
- * @param t Table structure holding all paging info for memory access operations
+ * @param t             Table structure holding all paging info for memory access operations
  */
 void set_table_ref (Info *current_state, Table *t);
 
@@ -61,18 +90,20 @@ void set_table_ref (Info *current_state, Table *t);
  * @brief Sets the operand info in the structure.
  * 
  * @param current_instruction_state Pointer to the Info structure holding all operand, instruction, registers and results info
- * @param operand Address for the sequence of characters that define the operand to update
- * @param address 64 bit long Address of the operand if any
- * @param size Number of bytes that the operand take (number of bytes as a char)
- * @param type Address for the sequence of characters that define the data type of this operands value
+ * @param operand   Address for the sequence of characters that define the operand to update
+ * @param address   64 bit long Address of the operand if any
+ * @param size      Number of bytes that the operand take (number of bytes as a char)
+ * @param type      Address for the sequence of characters that define the data type of this operands value
+ * @param is_high   Flag to state if the operand is the high low byte on the supported registers (ah/bh/ch/dh)
+ * @param is_signed Flag to state if the operand is signed (1) or unsigned (0)
  */
-void set_operand_info (Info *current_instruction_state, char* operand, long long address, uint8_t size, uint8_t op_type, uint8_t is_high);
+void set_operand_info (Info *current_instruction_state, char* operand, long long address, uint8_t size, uint8_t op_type, uint8_t is_high, uint8_t is_signed);
 
 /**
  * @brief Sets the current instruction in use.
  * 
  * @param current_instruction_state Pointer to the Info structure holding all operand, instruction, registers and results info
- * @param instruction Instruction to execute
+ * @param instruction               Instruction to execute
  */
 void set_instruction(Info *current_instruction_state, uint8_t instruction);
 
