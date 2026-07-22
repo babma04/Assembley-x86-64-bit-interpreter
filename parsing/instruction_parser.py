@@ -2,57 +2,65 @@ import sys
 from exit_codes import ExitCode
 
 class Operand:
-    __slots__ = ["expression", "type", "address", "size", "valid"]
+    __slots__ = [
+        "expression",
+        "type",
+        "address",
+        "size",
+        "is_high",
+        "is_signed",
+        "valid",
+    ]
 
-    def __init__ (self) -> None:
+    def __init__(self) -> None:
         """
-        Initializes the parameters of the operand if they are defined
-
-        :param type: Type of the operand (register/memory/immediate)
-        :type type: str
-        :param value: Value of the operand
-        :type value: bytes
-        :param size: Number of bytes to use
-        :type size: int
+        Initializes the parameters of the operand.
         """
-        self.valid: bool = False # Information validity flag for usability
+        self.valid: bool = False  # Information validity flag for usability
         self.expression: str = ""
-        self.type: str = ""   # register/ memory/ immediate
-        self.address: bytes = b""   
-        self.size: int = 0   # number of bytes
+        self.type: int = 0  # OpType enum (e.g., REGISTER, MEMORY, IMMEDIATE)
+        self.address: int = 0  # Virtual address or register index (long long)
+        self.size: int = 0  # Size in bytes (1, 2, 4, 8)
+        self.is_high: int = 0  # Flag for high register access (e.g., AH, BH)
+        self.is_signed: int = 0  # Flag for signed register/operand operations
 
-    def set (self,expression: str, type: str, value: bytes, size: int) -> None:
+    def set(self, expression: str, op_type: int, address: int, size: int, is_high: int = 0, is_signed: int = 0) -> None:
         """
-        Sets the parameters of the operand \n
-        Needs all parameters to be specified.\n
-        Sets validity to True and enables use of this Operand info
+        Sets the parameters of the operand.
+        Sets validity to True and enables use of this Operand info.
 
         :param expression: Unprocessed expression of the operand
         :type expression: str
-        :param type: Type of the operand (register/memory/immediate)
-        :type type: str
-        :param value: Value of the operand
-        :type value: bytes
-        :param size: Number of bytes to use
+        :param op_type: Type of the operand (OpType enum integer)
+        :type op_type: int
+        :param address: Virtual address for memory or register index
+        :type address: int
+        :param size: Number of bytes to use (1, 2, 4, 8)
         :type size: int
+        :param is_high: High register byte indicator (0 or 1)
+        :type is_high: int
+        :param is_signed: Signed operand indicator (0 or 1)
+        :type is_signed: int
         """
-        self.valid = True 
+        self.valid = True
         self.expression = expression
-        self.type = type   
-        self.address = value   
-        self.size = size   
+        self.type = op_type
+        self.address = address
+        self.size = size
+        self.is_high = is_high
+        self.is_signed = is_signed
 
-    def clear (self) -> None:
+    def clear(self) -> None:
         """
-        Sets the validity parameter to False to signal not current/ usable information
+        Sets the validity parameter to False to signal not current/usable information.
         """
         self.valid = False
-    
+
     def is_valid(self) -> bool:
         """
-        Returns the usability status of this Operand object
+        Returns the usability status of this Operand object.
 
-        :return: True if the operand can be used, meaning all the info was successful updated previously, False otherwise
+        :return: True if the operand can be used, False otherwise.
         :rtype: bool
         """
         return self.valid

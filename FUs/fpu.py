@@ -1,45 +1,120 @@
 import ctypes
 import os
-from .common_classes import Operand, Info
-class FPU:
-    def __init__(self, lib_path: str="./libops.so"):
-        self.lib = ctypes.CDLL(os.path.abspath(lib_path))
 
-        self.lib.get_operand_info.argtypes = [
-            ctypes.c_char_p, ctypes.c_int, ctypes.c_int, 
-            ctypes.c_int, ctypes.c_char_p
-        ]
-        self.lib.set_instruction.argtypes = [ctypes.c_char_p]
-        self.lib.clean.argtypes = []
+from bridges.register_manager import Registers_Interface
+from bridges.data_memory import Data_Memory
+
+# might not be needed later
+from .common_classes import Operand, Info
+
+from parsing.patter_matching_helpers import INSTRUCTIONS
+from parsing.instruction_parser import Operand as OP
+from conftest import PROJECT_ROOT
+
+
+# Lookup opcodes table
+FPU_OPCODES = {name.lower(): index for index, name in enumerate(INSTRUCTIONS['fpu'])}
+class FPU:
+    __slots__ = ["lib", "state"]
     
-    def load_values(self, instruction: str, op1_value: int, op1_address: int | None, op1_type: str | None, op1_size: int, op2_value: int, op2_address: int | None, op2_type: str | None, op2_size: int) -> None:
+    def __init__(self, registers: Registers_Interface, memory: Data_Memory, libops_path: str = os.path.join(PROJECT_ROOT, "lib/liboperations.so")) -> None:
+        self.lib = ctypes.CDLL(os.path.abspath(libops_path))
+
+        self.lib.create_operand_state.argtypes = []
+        self.lib.create_operand_state.restype = ctypes.c_void_p
+    
+        self.lib.free_operand_state.argtypes = [ctypes.c_void_p]
+        self.lib.free_operand_state.restype = None
+    
+        self.lib.set_registers_ref.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+        self.lib.set_registers_ref.restype = None
+    
+        self.lib.set_table_ref.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+        self.lib.set_table_ref.restype = None
+    
+        # Updated to match the new Operand C struct fields
+        self.lib.set_operand_info.argtypes = [
+            ctypes.c_void_p,      # Info*
+            ctypes.c_char_p,      # operand slot ("op1" / "op2")
+            ctypes.c_longlong,    # address
+            ctypes.c_int,         # op_type (OpType enum)
+            ctypes.c_uint8,       # size
+            ctypes.c_uint8,       # is_high
+            ctypes.c_uint8,       # is_signed
+        ]
+        self.lib.set_operand_info.restype = None
+    
+        # Opcode is now an enum/int instead of a string pointer
+        self.lib.set_instruction.argtypes = [ctypes.c_void_p, ctypes.c_int]
+        self.lib.set_instruction.restype = None
+    
+        self.lib.clean.argtypes = [ctypes.c_void_p]
+        self.lib.clean.restype = None
+    
+        self.lib.dispatch.argtypes = [ctypes.c_void_p]
+        self.lib.dispatch.restype = None
+    
+        # Prepares all needed info
+        self.state = self.lib.create_operand_state()
+        self.lib.set_registers_ref(self.state, registers)
+        self.lib.set_table_ref(self.state, memory)
+    
+    def __del__(self) -> None:
+        # Best-effort: free the C-side struct once this ALU is collected.
+        state = getattr(self, "state", None)
+        lib = getattr(self, "lib", None)
+        if state and lib:
+            lib.free_operand_state(state)
+
+    def load_values(self, instruction: str, op1: OP, op2: OP) -> None:
         """
         Initializes the c structure in operations.c
-        
-        :param instruction: Instruction to do
-        :type instrution: str
-        :param op1_value: Value of the source operand
-        :type op1_value: int
-        :param op1_address: Address of the source operand if any
-        :type op1_address: int | None
-        :param op1_type: Operand type of the source operand if it exists
-        :type op1_type: str | None
-        :param op1_size: Number of bytes the source operand takes
-        :type op1_size: int
-        :param op2_value: Value of the destination operand
-        :type op2_value: int
-        :param op2_address: Address of the destination operand if any
-        :type op2_address: int | None
-        :param op2_type: Operand type of the destination operand if it exists
-        :type op2_type: str | None
-        :param op2_size: Number of bytes the destination operand takes
-        :type op2_size: int
-        """
-        self.lib.set_instruction(instruction)
-        if op1_type != None:
-            self.lib.get_operand_info("op1", op1_address, op1_value, op1_size, op1_type)
-        if op2_type != None:
-            self.lib.get_operand_info("op2", op2_address, op2_value, op2_size, op2_type)
     
-    def execute(self):
-        self.lib.dispatch()
+        :param instruction: Instruction to execute
+        :type instruction: str
+        :param op1: Operand obj for the first operand
+        :param op2: Operand obj for the second operand
+        """
+        self.lib.clean(self.state)
+        opcode: int = self.get_opcode(instruction)
+        self.lib.set_instruction(self.state, opcode)
+    
+        if op1 and op1.is_valid():
+            self.lib.set_operand_info(
+                self.state, b"op1",
+                op1.address,
+                int(op1.type),
+                op1.size,
+                getattr(op1, "is_high", 0),
+                getattr(op1, "is_signed", 0)
+            )
+    
+        if op2 and op2.is_valid():
+            self.lib.set_operand_info(
+                self.state, b"op2",
+                op2.address,
+                int(op2.type),
+                op2.size,
+                getattr(op2, "is_high", 0),
+                getattr(op2, "is_signed", 0)
+            )
+    
+    def execute(self) -> None:
+        """
+        Executes the instruction loaded in the c structure.
+        """
+        self.lib.dispatch(self.state)
+
+
+        
+    @staticmethod
+    def get_opcode(instruction: str) -> int:
+        """
+        Retrieves the numeric opcode corresponding to the given ALU instruction.
+    
+        :param instruction: Name of the instruction (e.g., "add", "sub")
+        :type instruction: str
+        :return: 0-based opcode index if valid, or -1 if the instruction is unsupported
+        :rtype: int
+        """
+        return FPU_OPCODES.get(instruction.lower(), -1)
