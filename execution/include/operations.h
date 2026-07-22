@@ -63,12 +63,10 @@ void set_table_ref (Info *current_state, Table *t);
  * @param current_instruction_state Pointer to the Info structure holding all operand, instruction, registers and results info
  * @param operand Address for the sequence of characters that define the operand to update
  * @param address 64 bit long Address of the operand if any
- * @param value 64 bit long Value of the given operand
  * @param size Number of bytes that the operand take (number of bytes as a char)
  * @param type Address for the sequence of characters that define the data type of this operands value
- * @param visual_rep Visual representation it should have (0 for string representation, 1 for numerical representation)
  */
-void set_operand_info (Info *current_instruction_state, char *operand, long long address, long long value, uint8_t size, char *op_type, uint8_t visual_rep);
+void set_operand_info (Info *current_instruction_state, char* operand, long long address, uint8_t size, uint8_t op_type, uint8_t is_high);
 
 /**
  * @brief Sets the current instruction in use.
@@ -76,7 +74,7 @@ void set_operand_info (Info *current_instruction_state, char *operand, long long
  * @param current_instruction_state Pointer to the Info structure holding all operand, instruction, registers and results info
  * @param instruction Instruction to execute
  */
-void set_instruction(Info *current_instruction_state, char *instruction);
+void set_instruction(Info *current_instruction_state, uint8_t instruction);
 
 // Infor cleaner
 /**

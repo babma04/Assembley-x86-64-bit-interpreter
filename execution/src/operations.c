@@ -7,7 +7,8 @@
 
 typedef enum {
     OP_MEMORY,
-    OP_REGISTER
+    OP_REGISTER,
+    OP_IMMEDIATE
 } OpType;
 
 typedef enum {
@@ -35,25 +36,25 @@ typedef enum {
 // Structure for each alu operand's necessary info
 typedef struct Operand{
     long long address;  // virtual address for memory or index for registers
-    uint8_t size;       // 1,2,4,8
     OpType op_type;
+    uint8_t size;       // 1,2,4,8
     uint8_t is_high;
+    uint8_t is_signed;  // only for registers
 } Operand;
 
 // To be implemented a fpu operand struct
 
 // Structure for all necessary instruction info
 struct Info {
-    Opcode opcode;
-    Operand op1;
-    Operand op2;
-    CPURegs *registers;
+    CPURegs* registers;
     Table* table;
-    Operand result;
     unsigned long long res_value;
     unsigned long long op1_value;
     unsigned long long op2_value;
-
+    Operand op1;
+    Operand op2;
+    Operand result;
+    Opcode opcode;
 };
 
 // --------------------------------------------------------------------------------
@@ -80,9 +81,6 @@ static void commit_operand (Info* current_instruction_state, Operand* op, long l
 // Lookup Table
 // --------------------------------------------------------------------------------
 
-// Standard instruction function signature alias
-typedef void (*InstructionFunc)(Info *);
-
 // Instructions link struct
 // Typedef for instruction handler function pointers
 typedef void (*InstructionHandler)(Info*);
@@ -91,7 +89,6 @@ typedef void (*InstructionHandler)(Info*);
 const InstructionHandler dispatch_table[OP_COUNT] = {
     // Data Path
     [OP_CMP]  = exec_cmp,
-
     // ALU
     [OP_ADD]  = exec_add,
     [OP_ADC]  = exec_adc,
@@ -105,6 +102,7 @@ const InstructionHandler dispatch_table[OP_COUNT] = {
     [OP_NOT]  = exec_not,
     [OP_NEG]  = exec_neg,
     [OP_XCHG] = exec_xchg
+    // FPU
 };
 
 
@@ -122,7 +120,7 @@ Info* create_operand_state ()
 
     if (op_state == NULL)
     {
-        printf("operand table creation error. NULL pointer was achieved!\n");
+        printf("Operand table creation error. NULL pointer was achieved!\n");
         return NULL;
     }
     return op_state;
@@ -137,22 +135,26 @@ void free_operand_state (Info* s)
 // Info setters
 // ----------------------------
 
-void set_operand_info (Info *current_instruction_state, char *operand, long long address, long long value, uint8_t size, char *op_type, uint8_t visual_rep)
+void set_operand_info (Info *current_instruction_state, char *operand, long long address, uint8_t size, uint8_t op_type, uint8_t is_high, uint8_t is_signed)
 {
     if (operand != NULL && strcmp(operand, "op1") == 0 )
     {
         current_instruction_state->op1.address = address;
         current_instruction_state->op1.size = size;
         current_instruction_state->op1.op_type = op_type;
+        current_instruction_state->op1.is_high = is_high;
+        current_instruction_state->op1.is_signed = is_signed;
     } else
     {
         current_instruction_state->op2.address = address;
         current_instruction_state->op2.size = size;
         current_instruction_state->op2.op_type = op_type;
+        current_instruction_state->op2.is_high = is_high;
+        current_instruction_state->op2.is_signed = is_signed;
     }
 }
 
-void set_instruction (Info *current_instruction_state, int instruction)
+void set_instruction (Info *current_instruction_state, uint8_t instruction)
 {
     current_instruction_state->opcode = instruction;
 }
@@ -175,7 +177,7 @@ void set_table_ref (Info *current_state, Table *t)
  * @param value The result value to be committed to the destination
  * @warning This function assumes that the operand type is either "memory" or "register". If the operand type is unknown, an error message will be printed.
  */
-static void commit_operand (Info* current_instruction_state, Operand* op, long long value)
+static void commit_operand (Info *current_instruction_state, Operand *op, long long value)
 {
     if (op->op_type == OP_MEMORY) {
         write_mem(current_instruction_state->table, op->address, (uint8_t*)&value, op->size, 1);
@@ -184,7 +186,7 @@ static void commit_operand (Info* current_instruction_state, Operand* op, long l
     }
     else
     {
-        printf("Error: Unknown operand type %s\n", op->op_type);
+        printf("Error: Unknown operand type %d\n", (uint8_t)op->op_type);
     }
 }
 
@@ -209,14 +211,22 @@ void clean(Info *s) {
 
 void dispatch(Info *s)
 {
-    set_result_info(s);
-    set_operands(s);
-    
     Opcode op = s->opcode; 
 
-    uint8_t is_xchg = op == OP_XCHG;
+    // Failsafe verification. Python calls should always make sure this is not triggered
+    if (op < 0 || op >= OP_COUNT || dispatch_table[op] == NULL)
+    {
+        printf("Error: invalid or unimplemented opcode (%d)\n", (int)op);
+        clean(s);
+        return;
+    }
+    
+    set_result_info(s);
+    set_operands_values(s);
+
+    uint8_t no_overwrite = op == OP_XCHG || op == OP_CMP;
     dispatch_table[op](s);
-    if (!is_xchg)
+    if (!no_overwrite)
     {
         commit_operand(s, &s->result, s->res_value);
     }
@@ -239,6 +249,8 @@ static void set_result_info (Info *current_state)
     current_state->result.op_type = current_state->op1.op_type;
     current_state->result.size = current_state->op1.size;
     current_state->result.address = current_state->op1.address;
+    current_state->result.is_high = current_state->op1.is_high;
+    current_state->result.is_signed = current_state->op1.is_signed;
 }
 
 
@@ -288,7 +300,7 @@ static void flags_update(Info *s, unsigned long long result)
  * 
  * @param s   Pointer to the current instruction Info execution context.
  */
-static void set_operands_values(Info* s)
+static void set_operands_values(Info *s)
 {
     if (!s) return;
 
@@ -307,7 +319,7 @@ static void set_operands_values(Info* s)
  * @param op  Pointer to the Operand struct to evaluate.
  * @return    The resolved 64-bit unsigned integer value.
  */
-static unsigned long long get_operand_value(Info* s, Operand* op)
+static unsigned long long get_operand_value(Info *s, Operand *op)
 {
     if (!s || !op) return 0ULL;
 
@@ -325,8 +337,8 @@ static unsigned long long get_operand_value(Info* s, Operand* op)
             break;
 
         default:
-            // Unknown or unsupported operand type
-            break;
+            // Immediate
+            value = op->address;
     }
 
     // Zero-extend/mask value to guarantee upper bits above op->size are clean
