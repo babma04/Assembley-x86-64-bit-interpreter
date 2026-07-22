@@ -13,10 +13,9 @@ typedef enum {
 
 typedef enum {
     OP_NULL = -1,
-    // Data Path
-    OP_CMP,
-
+    
     // ALU
+    OP_CMP,
     OP_ADD,
     OP_ADC,
     OP_SUB,
@@ -29,7 +28,9 @@ typedef enum {
     OP_NOT,
     OP_NEG,
     OP_XCHG,
-
+    
+    // FPU
+    // TO IMPLEMENT LATER
     OP_COUNT // Sentinel value representing total number of opcodes
 } Opcode;
 

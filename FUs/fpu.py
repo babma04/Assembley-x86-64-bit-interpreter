@@ -117,4 +117,4 @@ class FPU:
         :return: 0-based opcode index if valid, or -1 if the instruction is unsupported
         :rtype: int
         """
-        return FPU_OPCODES.get(instruction.lower(), -1)
+        return FPU_OPCODES.get(instruction.lower(), -1) + len(INSTRUCTIONS['alu'])
