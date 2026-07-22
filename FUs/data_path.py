@@ -252,6 +252,48 @@ class Data_Path:
     # -----------------
     # Implementations
     # -----------------
+
+    def execute_lea(self) -> None:
+        """
+        LEA (Load Effective Address):
+        Loads the calculated memory address of op2 directly into the destination register op1.
+        Does NOT dereference memory.
+        """
+        op1 = self.op1
+        op2 = self.op2
+
+        # LEA ignores memory contents and writes the computed address into op1
+        effective_address = op2.address
+        # op1 is already verified to be a register
+        self.registers.write_reg(op1.expression, effective_address)
+
+    def execute_mov(self) -> None:
+        """
+        MOV: Copies the value from op2 (Immediate, Register, or Memory) 
+        into op1 (Register or Memory).
+        """
+        op1 = self.op1
+        op2 = self.op2
+        op2_type = op2.type
+        size = op1.size
+
+        # 1. Read value from source (op2)
+        if op2_type == 3:    # IMMEDIATE
+            val = op2.address  # Immediate value is stored in the address field
+        elif op2_type == 1:  # REGISTER
+            val = self.registers.read_reg(op2.expression)
+        else:               # MEMORY (op2_type == 2)
+            val = self.memory.read_bytes(op2.address, op2.size)
+
+        # 2. Write value to destination (op1)
+        if op1.type == 1:    # REGISTER
+            val = int.from_bytes(val, "little") if isinstance(val, bytes) else val
+            self.registers.write_reg(op1.expression, val)
+        else:               # MEMORY 
+            if isinstance(val, int):
+                mask = (1 << (size * 8)) - 1
+                val = (val & mask).to_bytes(size, byteorder="little")
+            self.memory.write_bytes(op1.address, val, op1.size)
         
     def execute_jmp (self) -> int:
         try: 
