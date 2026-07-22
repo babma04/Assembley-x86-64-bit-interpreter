@@ -10,8 +10,25 @@ INSTRUCTIONS: dict[str, dict[str, int]] = {
                     'ret': 0
                 },
                 'data_path': {
-                    'lea': 2, 'mov': 2, 'jmp': 1, 'jb': 1, 'jl': 1, 'ja': 1,
-                    'jg': 1, 'je': 1, 'jne': 1, 'jz': 1, 'js': 1, 'jc': 1, 'jo': 1
+                    'lea': 2, 
+                    'mov': 2, 
+                    'jmp': 1,
+                    'je': 1, 'jz': 1,       # Jump if Equal / Zero (ZF == 1)
+                    'jne': 1, 'jnz': 1,     # Jump if Not Equal / Not Zero (ZF == 0)
+                    'jb': 1, 'jc': 1, 'jnae': 1,  # Jump if Below / Carry / Not Above or Equal (CF == 1)
+                    'jnb': 1, 'jnc': 1, 'jae': 1, # Jump if Not Below / Not Carry / Above or Equal (CF == 0)
+                    'ja': 1, 'jnbe': 1,           # Jump if Above / Not Below or Equal (CF == 0 and ZF == 0)
+                    'jbe': 1, 'jna': 1,           # Jump if Below or Equal / Not Above (CF == 1 or ZF == 1)
+                    'jl': 1, 'jnge': 1,     # Jump if Less / Not Greater or Equal (SF != OF)
+                    'jge': 1, 'jnl': 1,     # Jump if Greater or Equal / Not Less (SF == OF)
+                    'jg': 1, 'jnle': 1,     # Jump if Greater / Not Less or Equal (ZF == 0 and SF == OF)
+                    'jle': 1, 'jng': 1,     # Jump if Less or Equal / Not Greater (ZF == 1 or SF != OF)
+                    'js': 1,                # Jump if Sign / Negative (SF == 1)
+                    'jns': 1,               # Jump if Not Sign / Positive (SF == 0)
+                    'jo': 1,                # Jump if Overflow (OF == 1)
+                    'jno': 1,               # Jump if Not Overflow (OF == 0)
+                    'jp': 1, 'jpe': 1,      # Jump if Parity / Parity Even (PF == 1)
+                    'jnp': 1, 'jpo': 1      # Jump if Not Parity / Parity Odd (PF == 0)
                 },
                 'alu': {
                     'cmp': 2, 'add': 2, 'adc': 2, 'sub': 2, 'sbb': 2, 'inc': 1,
