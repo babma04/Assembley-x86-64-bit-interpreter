@@ -32,12 +32,11 @@ class Interpreter_x86:
             args = Interpreter_x86.get_args()
 
         Storage.clean_cache()  # Clean cache before starting
-        validation_file_name: str = Storage.initialize_instructions()     # Update method to enable more instructions
 
-        self.loader: Segment_Mapper = Segment_Mapper(file_name, len(args) if args else 0, args, validation_file_name)
+        self.loader: Segment_Mapper = Segment_Mapper(file_name, len(args) if args else 0, args)
         self.memory = self.loader.memory
         self.register = self.loader.registers
-        self.cpu: Control_Unit = Control_Unit(self.loader, validation_file_name, debugging)
+        self.cpu: Control_Unit = Control_Unit(self.loader, debugging)
         self.cpu.run()
         # State could be offered here
 
