@@ -5,13 +5,15 @@ VALID_START: str = "_start"
 
 INSTRUCTIONS: dict[str, dict[str, int]] = {
                 'cpu': {
-                    'syscall': 0,
-                    'call': 1,
-                    'ret': 0
+                    'syscall': 0
                 },
                 'data_path': {
                     'lea': 2, 
                     'mov': 2, 
+                    'push': 1,
+                    'pop': 1,
+                    'call': 1,
+                    'ret': 0,
                     'jmp': 1,
                     'je': 1, 'jz': 1,       # Jump if Equal / Zero (ZF == 1)
                     'jne': 1, 'jnz': 1,     # Jump if Not Equal / Not Zero (ZF == 0)

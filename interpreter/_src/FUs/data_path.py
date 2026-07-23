@@ -26,44 +26,50 @@ class Data_Path:
             self._execute_data_path_map = (
                 self.execute_lea,       # 0: lea
                 self.execute_mov,       # 1: mov
+
+                self.execute_push,      # 2: push
+                self.execute_pop,       # 3: pop
+
+                self.execute_call,      # 4: call
+                self.execute_ret,       # 5: ret
                 
-                self.execute_jmp,       # 2: jmp
+                self.execute_jmp,       # 6: jmp
                 
-                self.execute_je,        # 3: je
-                self.execute_je,        # 4: jz (alias)
-                self.execute_jne,       # 5: jne
-                self.execute_jne,       # 6: jnz (alias)
+                self.execute_je,        # 7: je
+                self.execute_je,        # 8: jz (alias)
+                self.execute_jne,       # 9: jne
+                self.execute_jne,       # 10: jnz (alias)
                 
-                self.execute_jb,        # 7: jb
-                self.execute_jb,        # 8: jc (alias)
-                self.execute_jb,        # 9: jnae (alias)
-                self.execute_jnb,       # 10: jnb
-                self.execute_jnb,       # 11: jnc (alias)
-                self.execute_jnb,       # 12: jae (alias)
-                self.execute_ja,        # 13: ja
-                self.execute_ja,        # 14: jnbe (alias)
-                self.execute_jbe,       # 15: jbe
-                self.execute_jbe,       # 16: jna (alias)
+                self.execute_jb,        # 11: jb
+                self.execute_jb,        # 12: jc (alias)
+                self.execute_jb,        # 13: jnae (alias)
+                self.execute_jnb,       # 14: jnb
+                self.execute_jnb,       # 15: jnc (alias)
+                self.execute_jnb,       # 16: jae (alias)
+                self.execute_ja,        # 17: ja
+                self.execute_ja,        # 18: jnbe (alias)
+                self.execute_jbe,       # 19: jbe
+                self.execute_jbe,       # 20: jna (alias)
                 
-                self.execute_jl,        # 17: jl
-                self.execute_jl,        # 18: jnge (alias)
-                self.execute_jge,       # 19: jge
-                self.execute_jge,       # 20: jnl (alias)
-                self.execute_jg,        # 21: jg
-                self.execute_jg,        # 22: jnle (alias)
-                self.execute_jle,       # 23: jle
-                self.execute_jle,       # 24: jng (alias)
+                self.execute_jl,        # 21: jl
+                self.execute_jl,        # 22: jnge (alias)
+                self.execute_jge,       # 23: jge
+                self.execute_jge,       # 24: jnl (alias)
+                self.execute_jg,        # 25: jg
+                self.execute_jg,        # 26: jnle (alias)
+                self.execute_jle,       # 27: jle
+                self.execute_jle,       # 28: jng (alias)
                 
-                self.execute_js,        # 25: js
-                self.execute_jns,       # 26: jns
+                self.execute_js,        # 29: js
+                self.execute_jns,       # 30: jns
                 
-                self.execute_jo,        # 27: jo
-                self.execute_jno,       # 28: jno
+                self.execute_jo,        # 31: jo
+                self.execute_jno,       # 32: jno
                 
-                self.execute_jp,        # 29: jp
-                self.execute_jp,        # 30: jpe (alias)
-                self.execute_jnp,       # 31: jnp
-                self.execute_jnp,       # 32: jpo (alias)
+                self.execute_jp,        # 33: jp
+                self.execute_jp,        # 34: jpe (alias)
+                self.execute_jnp,       # 35: jnp
+                self.execute_jnp,       # 36: jpo (alias)
             )
 
             self.opcode: int
@@ -136,11 +142,17 @@ class Data_Path:
         """
         opcode = self.opcode
 
-        if opcode == 1:
-            self.validate_mov_conditions()
-        elif opcode == 0:
+        if opcode == 0:
             self.validate_lea_conditions()
-        elif 2 <= opcode < len(self._execute_data_path_map):
+        elif opcode == 1:
+                    self.validate_mov_conditions()
+        elif opcode == 2 or opcode == 3:
+            self.validate_stack_condition()
+        elif opcode == 4:
+            self.validate_call_condition()
+        elif opcode == 5:
+            self.validate_ret_condition()
+        elif 6 <= opcode < len(self._execute_data_path_map):
             self.validate_jump_conditions()
         else:
             raise NotImplementedError(f"Validation for data path opcode {opcode} is not implemented.")
@@ -215,6 +227,51 @@ class Data_Path:
             raise SyntaxError("Cannot mix high 8-bit registers (AH, BH, CH, DH) with 64-bit registers or extended byte registers.")
 
 
+    def validate_stack_condition(self) -> None:
+        """
+        Validates the conditions for all stack instructions.
+        
+        :raises SyntaxError: If stack instructions execution rules are violated.
+        """
+        op1 = self.op1
+        op2 = self.op2
+
+        if not op1.is_valid():
+            raise SyntaxError("Stack instructions require exactly one operand.")
+        if op2.is_valid():
+            raise SyntaxError("Stack instructions cannot take a second operand.")
+
+        if op1.type == 3 and self.opcode != 2:
+            raise SyntaxError("Pop instruction requires a Register or a memory operator as arguments. No other operator type are supported")
+
+    def validate_call_condition(self) -> None:
+        """
+        Validates the conditions for the call instruction.
+                
+        :raises SyntaxError: If call instructions execution rules are violated.
+        """
+        op1 = self.op1
+        op2 = self.op2
+
+        if not op1.is_valid():
+            raise SyntaxError("Call instructions require exactly one operand.")
+        if op2.is_valid():
+            raise SyntaxError("Call instructions cannot take a second operand.")
+        # Label verification is done at runtime
+    
+    def validate_ret_condition(self) -> None:
+            """
+            Validates the conditions for the ret instruction.
+                    
+            :raises SyntaxError: If ret instructions execution rules are violated.
+            """
+            op1 = self.op1
+            op2 = self.op2
+    
+            if op1.is_valid() or op2.is_valid():
+                raise SyntaxError("Call instructions require no operands.")
+        
+
     def validate_jump_conditions(self) -> None:
         """
         Validates the conditions for all branching and jump instructions (jmp, je, jne, etc.).
@@ -280,7 +337,60 @@ class Data_Path:
                 mask = (1 << (size * 8)) - 1
                 val = (val & mask).to_bytes(size, byteorder="little")
             self.memory.write_bytes(op1.address, val, op1.size)
+
+
+    def execute_push(self) -> None:
+        """
+        PUSH: pushes the value from op1 (Immediate, Register, or Memory) 
+        into the stack (using the data memory interface for the stack).
+
+        :raises RuntimeError: if the push operation runs into a stack overflow
+        """
+
+        op1 = self.op1
+        op1_type = op1.type
+        size = op1.size
+
+        # 1. Read value from source (op2)
+        if op1_type == 3:    # IMMEDIATE
+            val = op1.address  # Immediate value is stored in the address field
+        elif op1_type == 1:  # REGISTER
+            val = self.registers.read_reg(op1.expression)
+        else:               # MEMORY (op2_type == 2)
+            val = self.memory.read_bytes(op1.address, op1.size)
+
+        if isinstance(val, int):
+            mask = (1 << (size * 8)) - 1
+            val = (val & mask).to_bytes(size, byteorder="little")
+
+        try:
+            self.memory.push(val)
+        except MemoryError:
+            raise RuntimeError
+
+    def execute_pop(self) -> None:
+        """
+        POP: pops the value from the stack
+        into op1 (using the data memory interface for the stack).
         
+        :raises RuntimeError: if the pop operation runs into a stack underflow
+        """
+
+        op1 = self.op1
+        op1_type = op1.type
+
+        try:
+            val = self.memory.pop()
+        except MemoryError:
+            raise RuntimeError
+        
+        if op1_type == 1:   # REGISTER
+            val = int.from_bytes(val, "little")
+            self.registers.write_reg(op1.expression, val, True if op1.is_signed else False)
+
+        elif op1_type == 2: # MEMORY
+            self.memory.write_bytes(op1.address, val, op1.size)
+    
     def execute_jmp (self) -> int:
         try: 
             return self.labels[self.op1.expression]
