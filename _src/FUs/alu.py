@@ -5,7 +5,7 @@ from bridges.register_manager import Registers_Interface
 from bridges.data_memory import Data_Memory
 
 # might not be needed later
-from .common_classes import Operand, Info
+from .common_classes import Info, CPURegs, Table
 
 from parsing.patter_matching_helpers import INSTRUCTIONS
 from parsing.instruction_parser import Operand as OP
@@ -23,43 +23,44 @@ class ALU:
         self.lib = ctypes.CDLL(os.path.abspath(libops_path))
 
         self.lib.create_operand_state.argtypes = []
-        self.lib.create_operand_state.restype = ctypes.c_void_p
+        self.lib.create_operand_state.restype = ctypes.POINTER(Info)
 
-        self.lib.free_operand_state.argtypes = [ctypes.c_void_p]
+        self.lib.free_operand_state.argtypes = [ctypes.POINTER(Info)]
         self.lib.free_operand_state.restype = None
 
-        self.lib.set_registers_ref.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+        self.lib.set_registers_ref.argtypes = [ctypes.POINTER(Info), ctypes.POINTER(CPURegs)]
         self.lib.set_registers_ref.restype = None
 
-        self.lib.set_table_ref.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+        self.lib.set_table_ref.argtypes = [ctypes.POINTER(Info), ctypes.POINTER(Table)]
         self.lib.set_table_ref.restype = None
 
-        # Updated to match the new Operand C struct fields
+        # Matches operations.h: (Info*, operand, address, size, op_type, is_high, is_signed)
         self.lib.set_operand_info.argtypes = [
-            ctypes.c_void_p,      # Info*
-            ctypes.c_char_p,      # operand slot ("op1" / "op2")
-            ctypes.c_longlong,    # address
-            ctypes.c_int,         # op_type (OpType enum)
-            ctypes.c_uint8,       # size
-            ctypes.c_uint8,       # is_high
-            ctypes.c_uint8,       # is_signed
+            ctypes.POINTER(Info),  # Info*
+            ctypes.c_char_p,       # operand slot ("op1" / "op2")
+            ctypes.c_longlong,     # address
+            ctypes.c_uint8,        # size
+            ctypes.c_uint8,        # op_type (OpType enum)
+            ctypes.c_uint8,        # is_high
+            ctypes.c_uint8,        # is_signed
         ]
         self.lib.set_operand_info.restype = None
 
-        # Opcode is now an enum/int instead of a string pointer
-        self.lib.set_instruction.argtypes = [ctypes.c_void_p, ctypes.c_int]
+        # uint8_t in the header, not c_int
+        self.lib.set_instruction.argtypes = [ctypes.POINTER(Info), ctypes.c_uint8]
         self.lib.set_instruction.restype = None
 
-        self.lib.clean.argtypes = [ctypes.c_void_p]
+        self.lib.clean.argtypes = [ctypes.POINTER(Info)]
         self.lib.clean.restype = None
 
-        self.lib.dispatch.argtypes = [ctypes.c_void_p]
+        self.lib.dispatch.argtypes = [ctypes.POINTER(Info)]
         self.lib.dispatch.restype = None
 
         # Prepares all needed info
         self.state = self.lib.create_operand_state()
         self.lib.set_registers_ref(self.state, registers)
         self.lib.set_table_ref(self.state, memory)
+
 
     def __del__(self) -> None:
         # Best-effort: free the C-side struct once this ALU is collected.
@@ -83,20 +84,22 @@ class ALU:
 
         if op1 and op1.is_valid():
             self.lib.set_operand_info(
-                self.state, b"op1",
+                self.state, 
+                b"op1",
                 op1.address,
-                int(op1.type),
                 op1.size,
+                int(op1.type),
                 getattr(op1, "is_high", 0),
                 getattr(op1, "is_signed", 0)
             )
 
         if op2 and op2.is_valid():
             self.lib.set_operand_info(
-                self.state, b"op2",
+                self.state,
+                b"op2",
                 op2.address,
-                int(op2.type),
                 op2.size,
+                int(op2.type),
                 getattr(op2, "is_high", 0),
                 getattr(op2, "is_signed", 0)
             )
