@@ -163,4 +163,3 @@ value = mem.pop()  # returns 8 bytes, clears the popped slot
 - `push` raises `ValueError` if `value` is longer than 8 bytes, and `MemoryError` on
   stack overflow (past `STACK_LIMIT`).
 - `pop` raises `MemoryError` on stack underflow (`rsp` at or past `STACK_START`).
-

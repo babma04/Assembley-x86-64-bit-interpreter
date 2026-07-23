@@ -295,3 +295,167 @@ Instead of forcing individual instruction handlers to manually parse text, verif
 ```
 
 ---
+
+## Shared Libraries (`interpreter/_src/lib/`)
+
+### Overview
+
+To maintain maximum runtime execution speed while keeping parsing and control flow high-level, all hardware state representation and execution logic are compiled into native shared objects (`.so`). These dynamic libraries are loaded at runtime by Python’s `ctypes` bridge layer (`interpreter/_src/bridges/`).
+
+Dividing the C execution engine into separate dynamic libraries enforces modularity, isolates memory management from register manipulation, and speeds up incremental builds during development.
+
+---
+
+### Library Breakdown
+
+#### 1. `libreg.so` — Register File Manager
+* **Source Files:** `interpreter/_src/execution/src/registers.c`, `interpreter/_src/execution/include/registers.h`
+* **Python Bridge:** `interpreter/_src/bridges/register_manager.py`
+* **Responsibilities:**
+  * Allocates and maintains the hardware register state (General Purpose Registers, FPU registers, `EFLAGS`).
+  * Implements bit-masking and offset logic for sub-register resolution (e.g., mapping read/write requests for `eax`, `ax`, `al`, and `ah` onto the underlying 64-bit `rax` storage).
+  * Manages flag register manipulation (`ZF`, `CF`, `SF`, `OF`, `TF`).
+
+#### 2. `libmmu.so` — Memory Management Unit
+* **Source Files:** `interpreter/_src/execution/src/memory_eng.c`, `interpreter/_src/execution/include/memory_eng.h`
+* **Python Bridge:** `interpreter/_src/bridges/data_memory.py`
+* **Responsibilities:**
+  * Implements the simulated **4-level page table** virtual memory system.
+  * Handles dynamic allocation of memory pages upon demand (Phase 1 mapping and runtime execution writes).
+  * Enforces stack boundary constraints (`rsp` tracking) and triggers stack overflow conditions.
+  * Handles multi-byte read and write operations, converting input byte streams into Little-Endian storage order within page allocations.
+
+#### 3. `liboperations.so` — Execution & ALU Engine
+* **Source Files:** `interpreter/_src/execution/src/operations.c`, `interpreter/_src/execution/include/operations.h`
+* **Python Bridge:** Called through Functional Units (`interpreter/_src/FUs/`)
+* **Responsibilities:**
+  * Performs actual hardware-level machine instructions (`add`, `sub`, `mov`, `cmp`, `xor`, bitwise shifts, etc.).
+  * Calculates arithmetic and logical conditions to update `EFLAGS` automatically following instruction execution.
+  * Interacts with `libreg.so` and `libmmu.so` structures to mutate machine state during instruction execution.
+
+---
+
+### Compilation & Build System
+
+The shared libraries are built using GCC with Position-Independent Code (`-fPIC`) enabled. The standard build flow is defined in the root `Makefile`:
+
+```makefile
+# Compiler & Flags
+CC     = gcc
+CFLAGS = -Wall -Wextra -O2 -fPIC -Iinterpreter/_src/execution/include
+LDFLAGS = -shared
+
+LIB_DIR = interpreter/_src/lib
+BUILD_DIR = build
+
+# Targets
+all: $(LIB_DIR)/libreg.so $(LIB_DIR)/libmmu.so $(LIB_DIR)/liboperations.so
+
+$(LIB_DIR)/libreg.so:$(BUILD_DIR)/registers.o
+	$(CC)$(LDFLAGS) -o $@ $^
+
+$(LIB_DIR)/libmmu.so:$(BUILD_DIR)/memory_eng.o
+	$(CC)$(LDFLAGS) -o $@ $^
+
+$(LIB_DIR)/liboperations.so:$(BUILD_DIR)/operations.o
+	$(CC)$(LDFLAGS) -o $@ $^
+```
+
+### Build Commands:
+
+- `make`: Compiles all C source files into object files in `build/` and outputs `.so` libraries into `interpreter/_src/lib/`.
+- `make clean`: Removes binary artifacts in `build/` and compiled `.so` shared libraries.
+
+### C/Python & Symbol Binding
+
+To ensure seamless interfacing with `ctypes`:
+
+1. **Explicit C Calling Conventions**: All public interfaces functions in the C engine use default C calling conventions (`cdecl`).
+2. **Opaque Pointer Passing**: Complex C structures (like the Page Table root or state structs) are passed back to Python as opaque pointer handles (void*/c_void_p), preventing Python from directly mutating low-level C pointers.
+3. **Buffer Passing**: Data transfer for memory reads and writes uses contiguous unsigned byte buffers (`uint8_t*` mapped to `ctypes.POINTER(ctypes.c_uint8)`), minimizing translation overhead across the language boundary.
+
+---
+
+## Virtual Memory Architecture (`memory_eng.c`)
+
+### 1. 4-Level Page Table Simulation
+The virtual memory system models a standard x86-64 paging mechanism to provide a realistic 64-bit virtual address space while minimizing host memory consumption:
+
+* **Page Directories:** Structured as a 4-level hierarchy (PML4 $\rightarrow$ PDPT $\rightarrow$ PD $\rightarrow$ PT).
+* **Page Allocation:** Memory pages (4 KB) are dynamically allocated on demand during Phase 1 mapping or when write operations target unallocated valid virtual addresses.
+* **Address Translation:** Virtual addresses are decomposed into 9-bit indices for each table level plus a 12-bit page offset:
+  * Bits `47–39`: PML4 Index
+  * Bits `38–30`: PDPT Index
+  * Bits `29–21`: PD Index
+  * Bits `20–12`: PT Index
+  * Bits `11–0`: Page Offset
+
+### 2. Stack Management & Bounds
+* **Growth Direction:** The stack grows downward from higher virtual memory addresses toward lower addresses.
+* **Stack Pointer (`rsp`):** Initialized to the top of the allocated stack region during setup.
+* **Stack Overflow Detection:** PUSH operations evaluate whether the updated `rsp` breaches the minimum stack boundary. If an illegal boundary crossing occurs, execution halts and returns the `STACK_OVERFLOW` (exit code `5`) error state.
+
+### 3. Endianness & Memory Buffers
+* **Little-Endian Layout:** All multi-byte numerical writes store the least significant byte (LSB) at the base target address and most significant bytes at higher contiguous addresses.
+* **Read Logic:** Reading $N$ bytes starting at address $A$ returns a contiguous byte sequence, stopping when either $N$ bytes have been retrieved or a null-terminator boundary is hit depending on the calling context.
+
+---
+
+## Register File Engine (`registers.c`)
+
+### 1. Storage Structure
+The register file maintains the full CPU state in native contiguous C memory blocks:
+
+* **16 General Purpose 64-bit Registers:** `rax`, `rbx`, `rcx`, `rdx`, `rsi`, `rdi`, `rbp`, `rsp`, `r8` through `r15`.
+* **FPU Register Set:** Dedicated floating-point registers.
+* **EFLAGS Register:** A 32-bit register holding status flags.
+
+### 2. Sub-Register Bit-Masking & Resolution
+Sub-register accesses do not store separate values; instead, they apply dynamic masks and bit-shifts directly against the 64-bit parent register:
+
+| Sub-Register | Bit Range Access | Operation / Mask |
+| :--- | :--- | :--- |
+| **64-bit** (e.g., `rax`) | Bits `0–63` | Direct 64-bit read/write |
+| **32-bit** (e.g., `eax`) | Bits `0–31` | Read: `val & 0xFFFFFFFF`<br>Write: Zero-extends upper 32 bits |
+| **16-bit** (e.g., `ax`) | Bits `0–15` | Read: `val & 0xFFFF`<br>Write: Preserves upper 48 bits |
+| **8-bit Low** (e.g., `al`) | Bits `0–7` | Read: `val & 0xFF`<br>Write: Preserves upper 56 bits |
+| **8-bit High** (e.g., `ah`) | Bits `8–15` | Read: `(val >> 8) & 0xFF`<br>Write: Preserves bits `0–7` and `16–63` |
+
+### 3. EFLAGS Condition Codes
+Instructions mutate status flags inside `EFLAGS` via dedicated C bit-manipulation helpers:
+
+* **Zero Flag (`ZF`):** Set if the result of an operation is zero.
+* **Sign Flag (`SF`):** Set if the most significant bit (MSB) of the result is 1 (negative).
+* **Carry Flag (`CF`):** Set if an unsigned arithmetic operation generated a carry out or borrow.
+* **Overflow Flag (`OF`):** Set if a signed arithmetic operation resulted in a signed overflow.
+* **Trap Flag (`TF`):** Reserved bit set to enable single-step execution debugging mode.
+
+---
+
+## Operations & Execution Engine (`operations.c`)
+
+### 1. Instruction Operations
+`operations.c` contains native C functions for executing primitive machine operations:
+
+* **Arithmetic:** `add`, `sub`, `inc`, `dec`, `imul`, `idiv`
+* **Logical:** `and`, `or`, `xor`, `not`, `shl`, `shr`
+* **Data Movement:** `mov`, `push`, `pop`
+* **Comparison:** `cmp`, `test`
+
+### 2. Automated Flag Calculation
+Every arithmetic and logical function automatically re-evaluates and updates `EFLAGS` in `libreg.so` upon completion:
+
+```c
+  // Conceptual pattern for arithmetic addition in operations.c
+  uint64_t op_add64(uint64_t dest, uint64_t src) {
+      uint64_t result = dest + src;
+      
+      // Update EFLAGS
+      set_flag_zf(result == 0);
+      set_flag_sf((result & (1ULL << 63)) != 0);
+      set_flag_cf(result < dest); // Unsigned overflow
+      set_flag_of(((dest ^ result) & (src ^ result) & (1ULL << 63)) != 0); // Signed overflow
+      
+      return result;
+  }
+```

@@ -57,11 +57,8 @@ class Storage:
         if not os.path.exists(CACHE_DIR):
             return
 
-        protected_file = Storage._get_path("valid_instructions.json")
         for name in os.listdir(CACHE_DIR):
             file_path = os.path.join(CACHE_DIR, name)
-            if file_path == protected_file:
-                continue
             try:
                 if os.path.isfile(file_path):
                     os.remove(file_path)

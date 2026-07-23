@@ -1,19 +1,12 @@
 # Storage
 
-A static-method utility class for reading and writing JSON files. It has two
-areas of responsibility:
+A static-method utility class for reading and writing JSON files with one primary functionality: 
 
-1. **General-purpose JSON storage** (`save_file`, `save_file_dictionary`,
+* **General-purpose JSON storage** (`save_file`, `save_file_dictionary`,
    `load_file`, `load_file_lines`, `convert_to_json`) — these always operate
    relative to `PROJECT_DIR`, the folder containing `storage.py` itself, so
    the class manages its own files consistently no matter where the program
    is launched from.
-2. **Execution-start helpers** (`initialize_instructions`, `read_valid_start`,
-   `read_valid_instructions`) — these validate and initialize the settings a
-   running program needs, relative to the **current working directory**
-   (i.e. wherever the program was started from). That's the point of them:
-   they check "does the settings file the running program needs exist right
-   here?" and create it if not, rather than reaching into `PROJECT_DIR`.
 
 ```python
 from storage import Storage
@@ -124,76 +117,17 @@ predictable even if not the most obvious behavior at a glance.
 
 ---
 
-### `Storage.initialize_instructions() -> str`
-
-**Execution-start helper.** Ensures a `valid_instructions.json` settings file
-exists in the current working directory, seeding it with a default set of
-valid start-label, data-path, ALU, and (currently empty) FPU instructions if
-one isn't already present there. Always returns the string
-`"valid_instructions.json"`.
-
-- **Use case:** call once when the program starts, from wherever it's being
-  run, to guarantee the settings file used by `read_valid_start` /
-  `read_valid_instructions` exists at that location.
-
-```python
-settings_file = Storage.initialize_instructions()
-```
-
----
-
-### `Storage.read_valid_start(file_name: str) -> str`
-
-**Execution-start helper.** Opens `file_name` directly (relative to the
-current working directory), parses it as JSON, and returns the
-`"valid start"` value.
-
-- **Raises `FileNotFoundError`** if the file doesn't exist.
-- **Raises `KeyError`** if the file exists but has no `"valid start"` key.
-- **Use case:** look up which label (e.g. `_start`) is accepted as the valid
-  program entry point for the current run.
-
-```python
-start_label = Storage.read_valid_start("valid_instructions.json")
-```
-
----
-
-### `Storage.read_valid_instructions(file_name: str) -> dict[str, dict[str, int]]`
-
-**Execution-start helper.** Opens `file_name` directly (same cwd-relative
-behavior as `read_valid_start`), parses it as JSON, and returns only the
-entries whose values are themselves dictionaries — filtering out flat
-entries like `"valid start"`.
-
-- **Raises `FileNotFoundError`** if the file doesn't exist.
-- **Use case:** get just the instruction-category tables (`data_path`, `alu`,
-  `fpu`, ...) for validating opcodes and their expected operand counts.
-
-```python
-instructions = Storage.read_valid_instructions("valid_instructions.json")
-# {"data_path": {...}, "alu": {...}, "fpu": {}}
-```
-
----
 
 ## Typical usage flow
 
 ```python
 from storage import Storage
 
-# 1. Validate/initialize the settings file needed for this run
-settings_file = Storage.initialize_instructions()
-
-# 2. Load the accepted entry-point label and instruction tables
-start_label = Storage.read_valid_start(settings_file)
-instructions = Storage.read_valid_instructions(settings_file)
-
-# 3. Clean up a raw assembly source file into a JSON list of instructions
+# Clean up a raw assembly source file into a JSON list of instructions
 json_file = Storage.convert_to_json("program.asm")
 program_lines = Storage.load_file_lines(json_file)
 
-# 4. Validate each line's opcode against `instructions`, using `start_label`
+# Validate each line's opcode against `instructions`, using `start_label`
 #    to check the entry point declaration, etc.
 ```
 
