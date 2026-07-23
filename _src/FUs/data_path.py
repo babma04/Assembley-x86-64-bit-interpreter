@@ -70,16 +70,6 @@ class Data_Path:
             self.op1: Operand
             self.op2: Operand
 
-
-    def __del__(self) -> None:
-        """
-        Frees C-allocated state structures upon garbage collection.
-        """
-        state = getattr(self, "state", None)
-        lib = getattr(self, "lib", None)
-        if state and lib:
-            lib.free_operand_state(state)
-        
     
     def load_values(self, instruction: str, op1: Operand, op2: Operand) -> None:
             """
@@ -150,7 +140,7 @@ class Data_Path:
             self.validate_mov_conditions()
         elif opcode == 0:
             self.validate_lea_conditions()
-        elif 2 <= opcode <= 12:
+        elif 2 <= opcode < len(self._execute_data_path_map):
             self.validate_jump_conditions()
         else:
             raise NotImplementedError(f"Validation for data path opcode {opcode} is not implemented.")
@@ -330,7 +320,7 @@ class Data_Path:
     def execute_jl(self) -> None:
         """Jump if Less (SF != OF). Signed comparison."""
         sf = self.registers.read_sign()
-        of = self.registers.read_overflow
+        of = self.registers.read_overflow()
         if sf != of:
             self.execute_jmp()
 
