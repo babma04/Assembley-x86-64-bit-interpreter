@@ -1,6 +1,6 @@
 import ctypes
 import os
-from bridges.register_manager import Registers_Interface
+from .register_manager import Registers_Interface
 
 class Data_Memory:
     """

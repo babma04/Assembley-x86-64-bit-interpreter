@@ -2,7 +2,7 @@ import json
 import os
 import sys
 
-from parsing.patter_matching_helpers import INSTRUCTIONS
+from _src.parsing.patter_matching_helpers import INSTRUCTIONS
 
 from exit_codes import ExitCode
 from conftest import CACHE_DIR, SRC_ROOT

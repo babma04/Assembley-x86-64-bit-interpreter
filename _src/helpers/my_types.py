@@ -1,7 +1,7 @@
 from typing import TypeAlias, Dict, List, Union
-from FUs.alu import ALU
-from FUs.data_path import Data_Path
-from FUs.fpu import FPU
+from _src.FUs.alu import ALU
+from _src.FUs.data_path import Data_Path
+from _src.FUs.fpu import FPU
 
 # Keep it simple and clean
 Address: TypeAlias = int
