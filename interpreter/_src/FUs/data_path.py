@@ -15,13 +15,14 @@ class Data_Path:
     
     """    
 
-    __slots__ = ["registers", "memory", "labels", "op1", "op2", "opcode", "_execute_data_path_map"]
+    __slots__ = ["registers", "memory", "labels", "op1", "op2", "opcode", "_execute_data_path_map", "rip"]
 
     def __init__(self, registers: Registers_Interface, memory: Data_Memory, labels: LabelMap) -> None:
 
             self.registers = registers
             self.memory = memory
             self.labels = labels
+            self.rip = -1
 
             self._execute_data_path_map = (
                 self.execute_lea,       # 0: lea
@@ -94,6 +95,14 @@ class Data_Path:
             if op2 and op2.is_valid():
                 self.op2 = op2
 
+    def load_rip(self, rip: int) -> None:
+        """
+        Loads the rip parameter of this class if a call operation is about to be performed
+
+        :param rip: Current Instruction Pointer of control unit
+        :type rip: int
+        """
+        self.rip = rip
 
     def execute(self):
         """
@@ -257,6 +266,8 @@ class Data_Path:
             raise SyntaxError("Call instructions require exactly one operand.")
         if op2.is_valid():
             raise SyntaxError("Call instructions cannot take a second operand.")
+        if self.rip == -1:
+            raise SyntaxError("RIP was not loaded.")
         # Label verification is done at runtime
     
     def validate_ret_condition(self) -> None:
@@ -301,6 +312,8 @@ class Data_Path:
         LEA (Load Effective Address):
         Loads the calculated memory address of op2 directly into the destination register op1.
         Does NOT dereference memory.
+
+        :raises SyntaxError: if the write fails
         """
         op1 = self.op1
         op2 = self.op2
@@ -308,12 +321,17 @@ class Data_Path:
         # LEA ignores memory contents and writes the computed address into op1
         effective_address = op2.address
         # op1 is already verified to be a register
-        self.registers.write_reg(op1.expression, effective_address)
+        try:
+            self.registers.write_reg(op1.expression, effective_address)
+        except ValueError:
+            raise SyntaxError
 
     def execute_mov(self) -> None:
         """
         MOV: Copies the value from op2 (Immediate, Register, or Memory) 
         into op1 (Register or Memory).
+
+        :raises SyntaxError: if the write or read fails
         """
         op1 = self.op1
         op2 = self.op2
@@ -324,19 +342,31 @@ class Data_Path:
         if op2_type == 3:    # IMMEDIATE
             val = op2.address  # Immediate value is stored in the address field
         elif op2_type == 1:  # REGISTER
-            val = self.registers.read_reg(op2.expression)
+            try:
+                val = self.registers.read_reg(op2.expression)
+            except ValueError:
+                raise SyntaxError
         else:               # MEMORY (op2_type == 2)
-            val = self.memory.read_bytes(op2.address, op2.size)
+            try:
+                val = self.memory.read_bytes(op2.address, op2.size)
+            except MemoryError:
+                raise SyntaxError
 
         # 2. Write value to destination (op1)
         if op1.type == 1:    # REGISTER
             val = int.from_bytes(val, "little") if isinstance(val, bytes) else val
-            self.registers.write_reg(op1.expression, val)
+            try:
+                self.registers.write_reg(op1.expression, val)
+            except ValueError:
+                raise SyntaxError
         else:               # MEMORY 
             if isinstance(val, int):
                 mask = (1 << (size * 8)) - 1
                 val = (val & mask).to_bytes(size, byteorder="little")
-            self.memory.write_bytes(op1.address, val, op1.size)
+            try:
+                self.memory.write_bytes(op1.address, val, op1.size)
+            except MemoryError:
+                raise SyntaxError  
 
 
     def execute_push(self) -> None:
@@ -355,9 +385,15 @@ class Data_Path:
         if op1_type == 3:    # IMMEDIATE
             val = op1.address  # Immediate value is stored in the address field
         elif op1_type == 1:  # REGISTER
-            val = self.registers.read_reg(op1.expression)
+            try:
+                val = self.registers.read_reg(op1.expression)
+            except ValueError as e:
+                raise RuntimeError(e)
         else:               # MEMORY (op2_type == 2)
-            val = self.memory.read_bytes(op1.address, op1.size)
+            try:
+                val = self.memory.read_bytes(op1.address, op1.size)
+            except MemoryError as e:
+                raise RuntimeError(e)
 
         if isinstance(val, int):
             mask = (1 << (size * 8)) - 1
@@ -365,8 +401,8 @@ class Data_Path:
 
         try:
             self.memory.push(val)
-        except MemoryError:
-            raise RuntimeError
+        except MemoryError as e:
+            raise RuntimeError(e)
 
     def execute_pop(self) -> None:
         """
@@ -374,6 +410,7 @@ class Data_Path:
         into op1 (using the data memory interface for the stack).
         
         :raises RuntimeError: if the pop operation runs into a stack underflow
+
         """
 
         op1 = self.op1
@@ -381,15 +418,52 @@ class Data_Path:
 
         try:
             val = self.memory.pop()
-        except MemoryError:
-            raise RuntimeError
+        except MemoryError as e:
+            raise RuntimeError(e)
         
         if op1_type == 1:   # REGISTER
             val = int.from_bytes(val, "little")
-            self.registers.write_reg(op1.expression, val, True if op1.is_signed else False)
+            try:
+                self.registers.write_reg(op1.expression, val, True if op1.is_signed else False)
+            except ValueError as e:
+                raise RuntimeError(e)
 
         elif op1_type == 2: # MEMORY
-            self.memory.write_bytes(op1.address, val, op1.size)
+            try:
+                self.memory.write_bytes(op1.address, val, op1.size)
+            except MemoryError as e:
+                raise RuntimeError(e)
+            
+
+    def execute_call(self) -> int:
+            """
+            Calls a function by pushing the current rip to the stack and jumping to the function.\n
+            'call' functionality expects a ret somewhere over in the code but won't bother if none is find and will behave as a normal 'jmp' operation
+    
+            :param label: label of the function to call
+            :type label: str
+            :raises RuntimeError: if the push operation runs into a stack overflow
+            """
+            label = self.op1.expression
+            try:
+                self.memory.push(bytes(self.rip + 1))
+            except MemoryError as e:
+                raise RuntimeError(e)
+            self.rip = -1
+            return self.labels[label]
+    
+    def execute_ret (self) -> int:
+        """
+        Jumps back to the address previously pushed by the 'call' operation.\n
+        Stack management must be correct to work as intended.
+
+        :raises RuntimeError: if the pop operation runs into a stack underflow
+        """
+        try:
+            return int(self.memory.pop().decode())
+        except MemoryError as e:
+            raise RuntimeError(e)
+
     
     def execute_jmp (self) -> int:
         try: 

@@ -154,14 +154,17 @@ class Control_Unit:
         
         """
         if self.current_fu == "cpu":
-            if self.current_instruction == "syscall":
-                self.syscall()
-            elif self.current_instruction == "call":
-                self.call(self.text_section[self.rip][1])
+            self.syscall()
         else:
+            if self.current_fu == "data_path" and instruction == "call":
+                current_fu.load_rip(self.rip)   # type: ignore
             current_fu: FU = self.get_current_fu()
             current_fu.load_values(instruction, self.op1, self.op2)
-            current_fu.execute()
+            try:
+                ret = current_fu.execute()      # type: ignore ONLY FOR JUMPS, CALL'S AND RET
+                self.rip = ret if ret != None else self.rip
+            except RuntimeError:
+                sys.exit(ExitCode.INVALID_INSTRUCTION_SYNTAX)
 
 
 
@@ -218,7 +221,7 @@ class Control_Unit:
         
     
     # -------------------------------
-    # SYSCALL'S  AND CALL'S METHODS
+    # SYSCALL'S METHODS (TO BE TRANSFORMED INTO A CLASS)
     # -------------------------------
 
     def syscall(self) -> None:
@@ -237,25 +240,6 @@ class Control_Unit:
         elif rax == 1 and rdi == 1:
             for i in range(rdx):
                 print(Data_Memory.read_bytes(self.memory, rsi + i, 1).decode('utf-8'))
-    
-
-    def call(self, label: str) -> None:
-        """
-        Calls a function by pushing the current rip to the stack and jumping to the function.\n
-        'call' functionality expects a ret somewhere over in the code but won't bother if none is find and will behave as a normal 'jmp' operation
-
-        :param label: label of the function to call
-        :type label: str
-        """
-        self.memory.push(bytes(self.rip + 1))
-        self.rip = self.labels[label]
-
-    def ret (self) -> None:
-        """
-        Jumps back to the address previously pushed by the 'call' operation.\n
-        Stack management must be correct to work as intended.
-        """
-        self.rip = int(self.memory.pop().decode())
 
 
     # -------------------------
