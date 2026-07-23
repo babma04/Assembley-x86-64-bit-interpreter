@@ -1,5 +1,5 @@
-# Assembly x84 64 bit python Interpreter
-A simple assembly x84 64-bit interpreter with sequential execution and error detection.
+# Assembly x86 64 bit python Interpreter
+A simple assembly x86 64-bit interpreter with sequential execution and error detection.
 
 
 ## About the Project
@@ -19,7 +19,7 @@ During each interpretation execution more validation is run to make sure the cur
 This projects offers two main interfaces:
 
 - A main.py script that run the code directly
-- A class with similar behavior as main that enables you to get the state of the program from its object before shuting down
+- A class with similar behavior as main that enables you to get the state of the program from its object before shutting down
 
 Before using please make sure your code follows the [Code format references](#code-format-and-syntax-references)
 
@@ -70,48 +70,48 @@ Before using please make sure your code follows the [Code format references](#co
 
 ## Project layout
 
-## Project layout
-
 ```text
 CPU_SIMULATOR/
-├── parsing/                     # Phase 1 & 2 parsing components
-│   ├── segment_mapper.py        # Phase 1: parse, map to memory, validate
-│   ├── control_unit.py          # Phase 2: execution loop & instruction dispatch
-│   ├── instruction_parser.py    # Instruction decoding and operand processing
-│   └── pattern_matching_helpers.py # Regex and token matching utilities
-├── FUs/                         # Functional Units (execution modules)
-│   ├── alu.py                   # Arithmetic Logic Unit implementation
-│   ├── fpu.py                   # Floating Point Unit implementation
-│   ├── data_path.py             # Data path signal routing
-│   └── common_classes.py        # Shared data structures and base FU classes
-├── bridges/
-│   ├── register_manager.py      # ctypes -> libreg.so
-│   └── data_memory.py           # ctypes -> libmmu.so
-├── execution/
-│   ├── include/                 # registers.h, memory_eng.h, operations.h
-│   └── src/                     # registers.c, memory_eng.c, operations.c
-├── lib/                         # libreg.so, libmmu.so, liboperations.so (built)
-├── build/                       # intermediate .o files (built)
+├── interpreter/                 # Main Python package
+│   ├── _src/                    # Internal source code
+│   │   ├── bridges/             # C-to-Python bindings
+│   │   │   ├── register_manager.py # ctypes -> libreg.so
+│   │   │   └── data_memory.py      # ctypes -> libmmu.so
+│   │   ├── execution/           # C execution engine source & headers
+│   │   │   ├── include/         # registers.h, memory_eng.h, operations.h
+│   │   │   └── src/             # registers.c, memory_eng.c, operations.c
+│   │   ├── FUs/                 # Functional Units (execution modules)
+│   │   │   ├── alu.py           # Arithmetic Logic Unit implementation
+│   │   │   ├── fpu.py           # Floating Point Unit implementation
+│   │   │   ├── data_path.py     # Data path signal routing
+│   │   │   └── common_classes.py # Shared data structures and base FU classes
+│   │   ├── helpers/             # Shared utility modules (e.g., storage.py)
+│   │   ├── lib/                 # Compiled shared libraries (.so)
+│   │   ├── parsing/             # Phase 1 & 2 parsing components
+│   │   │   ├── segment_mapper.py        # Phase 1: parse, map to memory, validate
+│   │   │   ├── control_unit.py          # Phase 2: execution loop & instruction dispatch
+│   │   │   ├── instruction_parser.py    # Instruction decoding and operand processing
+│   │   │   └── pattern_matching_helpers.py # Regex and token matching utilities
+│   │   └── program_cache/       # Cached/processed JSON files
+│   ├── __init__.py
+│   ├── exit_codes.py            # ExitCodes enum class holder
+│   └── interpreter.py           # Program's core runner class
 ├── tests/                       # Test suites & resources
-│   ├── asm/                     # Dir holding example asm files for testing
+│   ├── asm/                     # Example assembly files for testing
 │   ├── bin/                     # Compiled test binaries/fixtures
 │   ├── bridge/                  # Python bridge test suite
-│   │   ├── test_register_manager.py
-│   │   ├── test_data_memory.py
-│   │   └── test_integration.py
-│   ├── execution_tests/         # C-level tests
+│   ├── execution_tests/         # C-level unit tests
 │   ├── parser/                  # Parser test suite
-│   ├── storage_tests/           # Python storing system test suite
+│   ├── storage_tests/           # Python storage system test suite
+│   ├── conftest.py              # Pytest configuration and path routing
 │   ├── test_cpu.py              # CPU integration test suite
 │   └── test_env.py              # Environment configuration tests
-├── program_cache/               # Dir holding processed json files being used
-├── helpers/                     # Shared utility modules
+├── build/                       # Intermediate C build files (.o)
+├── docs/                        # Project documentation
 ├── .gitignore
-├── conftest.py                  # Pytest runner configuration
-├── exit_codes.py                # ExitCodes enum class holder
-├── interpreter.py               # Program's class with similar behavior as main
 ├── main.py                      # CLI entry point
-└── Makefile                     # Build targets for C libraries and tests
+├── Makefile                     # Build targets for C libraries and tests
+└── pyproject.toml               # Package configuration and dependencies
 ```
 
 ## Building
@@ -137,6 +137,9 @@ This program can take up to one command-line argument providing a path to a asm 
 ```bash
 $py main.py tests/asm/example.asm 
 ```
+
+You can also use the class object provided by the class `interpreter` which enables state observation and fetching, as well as extended debugging.
+
 ---
 
 ## **Implementation and Decisions**
@@ -293,9 +296,9 @@ The application returns the following exit codes to indicate success or specific
    `execution/src/operations.c`.
 2. Add or extend a Functional Unit in `FUs/` to decode the instruction's
    operands and call into the new operation.
-3. Register the instruction in `parsing/patter_matching_helpers.py` under **INSTRUCTIONS** so it dispatches to
+3. Register the instruction in `parsing/pattern_matching_helpers.py` under **INSTRUCTIONS** so it dispatches to
    the right FU.
-4. Add coverage: a C-level test under `tests/exectuation_tests/`, and a
+4. Add coverage: a C-level test under `tests/execution_tests/`, and a
    Python-level test under `tests/<specific folder>/`
 
 **Changing registers or memory internals**
@@ -324,9 +327,7 @@ The application returns the following exit codes to indicate success or specific
 
 - Implement FPU operations and logic operations not yet available (rotations and shifts);
 
-- Reforcing the syscalls supported by the program;
-
-- Optimize the operands dispatch through an index array of operations instead of a loopup table
+- Reinforcing the syscall's supported by the program;
 
 - Implement a debugging execution type with gdb commands and one instruction at a time execution using the trap flag mechanism already implemented;
 
