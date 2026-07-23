@@ -1,8 +1,9 @@
 import os
 import sys
-from _src.parsing.segment_mapper import Segment_Mapper
-from _src.parsing.control_unit import Control_Unit
-from _src.helpers.storage import Storage
+
+from ._src.parsing.segment_mapper import Segment_Mapper
+from ._src.parsing.control_unit import Control_Unit
+from ._src.helpers.storage import Storage
 
 
 class Interpreter_x86:

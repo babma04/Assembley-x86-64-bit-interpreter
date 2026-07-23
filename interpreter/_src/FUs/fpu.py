@@ -1,14 +1,13 @@
 import ctypes
 import os
 
-from _src.bridges.register_manager import Registers_Interface
-from _src.bridges.data_memory import Data_Memory
+from ..bridges.register_manager import Registers_Interface
+from ..bridges.data_memory import Data_Memory
 
-# might not be needed later
 from .common_classes import Info, CPURegs, Table
 
-from _src.parsing.patter_matching_helpers import INSTRUCTIONS
-from _src.parsing.instruction_parser import Operand as OP
+from ..parsing.patter_matching_helpers import INSTRUCTIONS
+from ..parsing.instruction_parser import Operand as OP
 from conftest import SRC_ROOT
 
 

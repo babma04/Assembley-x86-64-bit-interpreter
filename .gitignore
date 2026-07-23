@@ -3,6 +3,7 @@ lib/
 build/
 *.o
 *.so
+interpreter/_src/lib/
 tests/lib/
 tests/bin/
 
@@ -12,7 +13,8 @@ __pycache__/
 *.py[cod]
 *$py.class
 program_cache/
-lib
+.venv/
+.pytest_cache/
 
 # OS specific
 .DS_Store
@@ -21,5 +23,5 @@ lib
 .vscode/
 .idea/
 
-# Specific file for testing
-# Nothing for now
+# pip specific
+*.egg-info/

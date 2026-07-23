@@ -1,42 +1,50 @@
 """
 Shared setup for tests/.
 
-Puts _src/bridges/ on sys.path so `from register_manager import ...` and
-`from data_memory import ...` work the same way data_memory.py itself
-expects (it does a flat `from register_manager import Registers_Interface`,
-not a package-relative import).
+Finds the project root by walking upward looking for `pyproject.toml`,
+rather than looking for a specific nested source directory. Anchoring on
+the marker file (not a hardcoded path shape like `_src/bridges` or
+`interpreter/_src/bridges`) means internal folder reorganizations never
+break this again -- pyproject.toml only moves if the whole project moves,
+and if that happens the fix is the same either way: nothing, since the
+walk-up still finds it relative to wherever the repo now lives.
 
-Finds the project root by walking upward looking for a `_src/bridges/`
-directory, rather than assuming a fixed number of parent directories from
-this file. That assumption already broke once (when these tests moved from
-tests/ to tests/bridge/) and would break again the next time anything
-moves -- walking up removes that whole class of bug.
+This project is pip-installed in editable mode (`pip install -e .` from
+the project root, see pyproject.toml), which makes `bridges`, `FUs`,
+`helpers`, and `parsing` importable as top-level packages
+(`from bridges.register_manager import ...`) regardless of where the repo
+sits on disk. This conftest no longer manually inserts bridges/ onto
+sys.path -- that's what previously broke every time _src moved, and it's
+no longer needed once the editable install is in place.
+
+If you ever relocate the whole repo to a new path, just re-run
+`pip install -e .` once from the new location.
 """
 import os
 import sys
 
-
 def _find_project_root(start_dir: str) -> str:
     current = start_dir
     while True:
-        if os.path.isdir(os.path.join(current, "_src", "bridges")):
+        if os.path.isfile(os.path.join(current, "pyproject.toml")):
             return current
         parent = os.path.dirname(current)
         if parent == current:
             raise RuntimeError(
-                f"Could not find a '_src/bridges' directory above {start_dir} -- "
+                f"Could not find a 'pyproject.toml' above {start_dir} -- "
                 "is this test file still somewhere inside the project tree?"
             )
         current = parent
 
 
 PROJECT_ROOT = _find_project_root(os.path.dirname(os.path.abspath(__file__)))
-SRC_ROOT = os.path.join(PROJECT_ROOT, "_src/")
-CACHE_DIR = os.path.join(PROJECT_ROOT, "program_cache")
-BRIDGES_DIR = os.path.join(PROJECT_ROOT, "_src", "bridges")
-if BRIDGES_DIR not in sys.path:
-    sys.path.insert(0, BRIDGES_DIR)
+SRC_ROOT = os.path.join(PROJECT_ROOT, "interpreter", "_src") + os.sep
+CACHE_DIR = os.path.join(SRC_ROOT, "program_cache")
 
-LIBREG_PATH = os.path.join(PROJECT_ROOT, "lib", "libreg.so")
-LIBMMU_PATH = os.path.join(PROJECT_ROOT, "lib", "libmmu.so")
+LIBREG_PATH = os.path.join(SRC_ROOT, "lib", "libreg.so")
+LIBMMU_PATH = os.path.join(SRC_ROOT, "lib", "libmmu.so")
 LIBS_PRESENT = os.path.exists(LIBREG_PATH) and os.path.exists(LIBMMU_PATH)
+
+# Add SRC_ROOT to sys.path so tests can import internal folders directly
+if SRC_ROOT not in sys.path:
+    sys.path.insert(0, SRC_ROOT)

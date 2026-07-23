@@ -20,7 +20,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from _src.FUs.data_path import Data_Path, DATA_PATH_OPCODES
+from interpreter._src.FUs.data_path import Data_Path, DATA_PATH_OPCODES
 
 
 def make_op(address=0, type_=1, size=4, is_high=0, is_signed=0, expression="rax", valid=True):

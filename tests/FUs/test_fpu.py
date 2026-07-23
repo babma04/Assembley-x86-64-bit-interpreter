@@ -19,9 +19,9 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
  
 import pytest
- 
-from _src.FUs.fpu import FPU, FPU_OPCODES
-from _src.parsing.patter_matching_helpers import INSTRUCTIONS
+
+from interpreter._src.FUs.fpu import FPU, FPU_OPCODES
+from interpreter._src.parsing.patter_matching_helpers import INSTRUCTIONS
  
 pytestmark = pytest.mark.skipif(
     not FPU_OPCODES,

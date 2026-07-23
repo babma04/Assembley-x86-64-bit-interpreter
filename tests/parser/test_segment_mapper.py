@@ -1,7 +1,8 @@
 import unittest
 from unittest.mock import patch, MagicMock, call
-from _src.parsing.segment_mapper import Segment_Mapper
-from exit_codes import ExitCode
+
+from interpreter._src.parsing.segment_mapper import Segment_Mapper
+from interpreter.exit_codes import ExitCode
 
 class TestSegmentMapperStaticHelpers(unittest.TestCase):
     """Tests for static methods that do not require class instantiation."""
@@ -178,9 +179,9 @@ class TestSegmentMapperStackAndLogic(unittest.TestCase):
 class TestSegmentMapperParsingAndTokenization(unittest.TestCase):
     """Tests complex regex tokenization, layout splitting, and program loading behavior."""
 
-    @patch('helpers.storage.Storage.save_file')
-    @patch('helpers.storage.Storage.load_file_lines')
-    @patch('helpers.storage.Storage.convert_to_json', return_value="dummy.json")
+    @patch('interpreter._src.helpers.storage.Storage.save_file')
+    @patch('interpreter._src.helpers.storage.Storage.load_file_lines')
+    @patch('interpreter._src.helpers.storage.Storage.convert_to_json', return_value="dummy.json")
     @patch.object(Segment_Mapper, '__init__', return_value=None)
     def test_load_program_tokenization_edge_cases(self, mock_init, mock_conv, mock_load, mock_save):
         mapper = Segment_Mapper("dummy.asm")

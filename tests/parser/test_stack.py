@@ -1,6 +1,7 @@
 import unittest
 from unittest.mock import patch, MagicMock
-from _src.parsing.segment_mapper import Segment_Mapper
+
+from interpreter._src.parsing.segment_mapper import Segment_Mapper
 
 class TestSegmentMapperStackDeepBoundaries(unittest.TestCase):
     """Exhaustive boundary and condition testing for the simulated runtime stack."""

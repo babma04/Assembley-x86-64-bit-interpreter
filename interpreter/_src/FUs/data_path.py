@@ -1,10 +1,10 @@
-from _src.helpers.my_types import LabelMap
+from ..helpers.my_types import LabelMap
 
-from _src.bridges.register_manager import Registers_Interface
-from _src.bridges.data_memory import Data_Memory
+from ..bridges.register_manager import Registers_Interface
+from ..bridges.data_memory import Data_Memory
 
-from _src.parsing.patter_matching_helpers import INSTRUCTIONS
-from _src.parsing.instruction_parser import Operand
+from ..parsing.patter_matching_helpers import INSTRUCTIONS
+from ..parsing.instruction_parser import Operand
 
 
 # Cached O(1) lookup dictionary for data path instruction opcodes

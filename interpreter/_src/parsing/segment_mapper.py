@@ -1,15 +1,15 @@
 import sys
 import re
 
-from _src.helpers.storage import Storage
-from _src.helpers.my_types import DataSectionInfo, BssSectionInfo, LabelMap, ConstantMap, Address
+from ..helpers.storage import Storage
+from ..helpers.my_types import DataSectionInfo, BssSectionInfo, LabelMap, ConstantMap, Address
 
-from _src.bridges.data_memory import Data_Memory
-from _src.bridges.register_manager import Registers_Interface
+from ..bridges.data_memory import Data_Memory
+from ..bridges.register_manager import Registers_Interface
 
 from .patter_matching_helpers import VALID_START, SIZE_DIRECTIVES, RODATA_BASE, DATA_BASE, BSS_BASE, STACK_START, TOKENS_PATTERN, ELEMENTS_TO_SKIP
 
-from exit_codes import ExitCode
+from interpreter.exit_codes import ExitCode
 
 class Segment_Mapper:
     """

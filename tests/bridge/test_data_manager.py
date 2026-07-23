@@ -26,8 +26,8 @@ _BRIDGES_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.p
 if _BRIDGES_DIR not in sys.path:
     sys.path.insert(0, _BRIDGES_DIR)
 
-from _src.bridges.register_manager import Registers_Interface  # noqa: E402
-from _src.bridges.data_memory import Data_Memory  # noqa: E402
+from interpreter._src.bridges.register_manager import Registers_Interface  # noqa: E402
+from interpreter._src.bridges.data_memory import Data_Memory  # noqa: E402
 
 
 @pytest.fixture

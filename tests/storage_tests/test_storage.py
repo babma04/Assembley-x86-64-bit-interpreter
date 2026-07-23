@@ -16,13 +16,11 @@ To keep tests isolated and avoid polluting the real project folder, we monkeypat
 both variables to point to an isolated `pytest` temporary directory and its subfolder.
 """
 import json
-import os
 import sys
 import pytest
 
-import conftest
-from _src.helpers import storage
-from _src.helpers.storage import Storage
+from interpreter._src.helpers import storage
+from interpreter._src.helpers.storage import Storage
 
 
 @pytest.fixture(autouse=True)

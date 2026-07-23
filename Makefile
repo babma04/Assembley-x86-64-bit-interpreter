@@ -1,12 +1,12 @@
 CC = gcc
-CFLAGS = -O3 -fPIC -I./execution/include
+CFLAGS = -O3 -fPIC -I./interpreter/_src/execution/include
 LDFLAGS = -shared
 
 # == Directories ====
 
-SRC_DIR = execution/src
-INC_DIR = execution/include
-LIB_DIR = lib
+SRC_DIR = interpreter/_src/execution/src
+INC_DIR = interpreter/_src/execution/include
+LIB_DIR = interpreter/_src/lib
 BUILD_DIR = build
 
 TEST_DIR = tests/execution_tests
@@ -55,7 +55,7 @@ $(LIB_REG): $(BUILD_DIR)/registers.o
 
 # Rule to compile AND link test executables against the custom libraries
 $(TEST_BIN_DIR)/%: $(TEST_DIR)/%.c $(SHARED_LIBS)
-	$(CC) -O3 -I./execution/include $< -o $@ -L$(LIB_DIR) $(TEST_LIBS) -Wl,-rpath=$$(pwd)/$(LIB_DIR)
+	$(CC) -O3 -I./interpreter/_src/execution/include $< -o $@ -L$(LIB_DIR) $(TEST_LIBS) -Wl,-rpath=$$(pwd)/$(LIB_DIR)
 
 test: all
 	@echo "Running tests..."

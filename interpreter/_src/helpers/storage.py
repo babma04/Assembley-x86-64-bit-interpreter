@@ -2,10 +2,14 @@ import json
 import os
 import sys
 
-from _src.parsing.patter_matching_helpers import INSTRUCTIONS
+from ...exit_codes import ExitCode
 
-from exit_codes import ExitCode
-from conftest import CACHE_DIR, SRC_ROOT
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../"))
+SRC_ROOT = os.path.join(PROJECT_ROOT, "interpreter", "_src")
+CACHE_DIR = os.path.join(SRC_ROOT, "program_cache")
+
+LIBREG_PATH = os.path.join(SRC_ROOT, "lib", "libreg.so")
+LIBMMU_PATH = os.path.join(SRC_ROOT, "lib", "libmmu.so")
 
 class Storage:
     """
@@ -28,7 +32,7 @@ class Storage:
         :type use_cache: bool
         :return str: The resolved file path.
         """
-        base_dir = CACHE_DIR if use_cache else SRC_ROOT
+        base_dir = CACHE_DIR if use_cache else PROJECT_ROOT
         if use_cache and not os.path.exists(base_dir):
             os.makedirs(base_dir)
         return os.path.join(base_dir, file_name)
@@ -84,6 +88,11 @@ class Storage:
         :type file_name: str
         :return str: The name of the new JSON file.
         """
+        src_path = Storage._get_path(file_name, use_cache=False)
+        if not os.path.exists(src_path):
+            print(f"Something went wrong! File {file_name} couldn't be opened.\n     Exiting program...\n")
+            sys.exit(ExitCode.UNOPENABLE_FILE)
+
         raw_text = Storage.load_file(file_name).splitlines()
         clean_lines : list[str] = []
 
@@ -97,7 +106,6 @@ class Storage:
 
         Storage.save_file(new_file_name, clean_lines)
         return new_file_name
-        
 
     @staticmethod
     def save_file(file_name: str, data: list[str] | list[list[str]]) -> None:

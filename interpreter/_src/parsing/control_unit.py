@@ -1,17 +1,17 @@
 import sys
-from _src.helpers.my_types import DataSectionInfo, BssSectionInfo, LabelMap, ConstantMap, FU
+from ..helpers.my_types import DataSectionInfo, BssSectionInfo, LabelMap, ConstantMap, FU
 
-from _src.bridges.data_memory import Data_Memory
+from ..bridges.data_memory import Data_Memory
 
 from .patter_matching_helpers import INSTRUCTIONS
 from .segment_mapper import Segment_Mapper
 from .instruction_parser import Instruction_Parser, Operand
 
-from _src.FUs.data_path import Data_Path
-from _src.FUs.alu import ALU
-from _src.FUs.fpu import FPU
+from ..FUs.data_path import Data_Path
+from ..FUs.alu import ALU
+from ..FUs.fpu import FPU
 
-from exit_codes import ExitCode
+from interpreter.exit_codes import ExitCode
 
 
 class Control_Unit:
@@ -33,9 +33,9 @@ class Control_Unit:
         # Initialize Control Unit with memory, segment mapper, functional units and registers (general purpose, fpu and flags)
         self.registers = loader.registers
         self.memory: Data_Memory = loader.memory
-        self.data_path: Data_Path = Data_Path(self.registers)
-        self.alu: ALU = ALU(self.registers)
-        self.fpu: FPU = FPU()
+        self.data_path: Data_Path = Data_Path(self.registers, self.memory, loader.labels)
+        self.alu: ALU = ALU(self.registers, self.memory)
+        self.fpu: FPU = FPU(self.registers, self.memory)
 
         # Useful registers and flags attributes
         self.rip: int = loader.rip  # Instruction Pointer initialized from Segment Mapper

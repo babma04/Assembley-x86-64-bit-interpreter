@@ -95,6 +95,7 @@ class Registers_Interface:
         self.lib.read_sign_flag.restype = ctypes.c_uint8
         self.lib.read_overflow_flag.argtypes = [ctypes.c_void_p]
         self.lib.read_overflow_flag.restype = ctypes.c_uint8
+        self.lib.read_parity_flag.argtypes = [ctypes.c_void_p]
         self.lib.read_parity_flag.restype = ctypes.c_uint8
         self.lib.write_rflags.argtypes = [
             ctypes.c_void_p,

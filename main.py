@@ -1,8 +1,8 @@
 import os
 import sys
-from _src.parsing.segment_mapper import Segment_Mapper
-from _src.parsing.control_unit import Control_Unit
-from _src.helpers.storage import Storage
+from interpreter._src.parsing.segment_mapper import Segment_Mapper
+from interpreter._src.parsing.control_unit import Control_Unit
+from interpreter._src.helpers.storage import Storage
 
 def main():
     """

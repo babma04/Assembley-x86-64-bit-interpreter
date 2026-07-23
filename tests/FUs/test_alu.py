@@ -19,7 +19,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from _src.FUs.alu import ALU, ALU_OPCODES
+from interpreter._src.FUs.alu import ALU, ALU_OPCODES
 
 
 def make_op(address=0, type_=0, size=4, is_high=0, is_signed=0, valid=True):

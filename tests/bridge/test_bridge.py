@@ -37,8 +37,8 @@ _BRIDGES_DIR = os.path.join(_PROJECT_ROOT, "bridges")
 if _BRIDGES_DIR not in sys.path:
     sys.path.insert(0, _BRIDGES_DIR)
 
-from _src.bridges.register_manager import Registers_Interface  # noqa: E402
-from _src.bridges.data_memory import Data_Memory  # noqa: E402
+from interpreter._src.bridges.register_manager import Registers_Interface  # noqa: E402
+from interpreter._src.bridges.data_memory import Data_Memory  # noqa: E402
 
 _LIBS_PRESENT = (
     os.path.exists(os.path.join(_PROJECT_ROOT, "lib", "libreg.so"))
@@ -120,6 +120,9 @@ class FakeRegLib:
     def read_carry_flag(self, _regs):
         return self._rflags & 1
 
+    def read_parity_flag(self, _regs):
+        return (self._rflags >> 2) & 1
+
     def read_zero_flag(self, _regs):
         return (self._rflags >> 6) & 1
 
@@ -163,7 +166,7 @@ def _configure_fake(lib):
         "CPURegs_create", "CPURegs_free", "write_reg", "read_8b_reg", "read_4b_reg",
         "read_2b_reg", "read_1b_reg", "set_reg_sign", "is_signed", "read_rflags",
         "read_trap_flag", "read_carry_flag", "read_zero_flag", "read_sign_flag",
-        "read_overflow_flag", "write_rflags", "exch_rflag", "set_trap_flag",
+        "read_overflow_flag", "read_parity_flag", "write_rflags", "exch_rflag", "set_trap_flag",
     ]:
         setattr(lib, fn_name, _FnWrapper(getattr(lib, fn_name)))
     return lib
