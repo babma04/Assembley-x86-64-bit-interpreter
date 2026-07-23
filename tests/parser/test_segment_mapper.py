@@ -1,7 +1,6 @@
 import unittest
 from unittest.mock import patch, MagicMock, call
-import sys
-from parsing.segment_mapper import Segment_Mapper
+from _src.parsing.segment_mapper import Segment_Mapper
 from exit_codes import ExitCode
 
 class TestSegmentMapperStaticHelpers(unittest.TestCase):
@@ -153,15 +152,15 @@ class TestSegmentMapperStackAndLogic(unittest.TestCase):
     @patch.object(Segment_Mapper, 'check_stack_limit')
     def test_align_stack_misaligned(self, mock_check, mock_print, mock_exit):
         # Setup a misaligned stack pointer (e.g., ends in 0x8 instead of 0x0)
-        self.mapper.registers.read_reg.return_value = 0x7fffffffe008
+        self.mapper.registers.read_reg.return_value = 0x7fffffffe008                            # type: ignore #tyo
         
         self.mapper.align_stack(self.mapper.memory, stack_limit=0x7fff00000000)
         
         # Aligned RSP target = 0x7fffffffe000
-        self.mapper.registers.write_reg.assert_called_with("rsp", 0x7fffffffe000, False)
+        self.mapper.registers.write_reg.assert_called_with("rsp", 0x7fffffffe000, False)        # type: ignore #tyo
 
     def test_push_arguments(self):
-        self.mapper.registers.read_reg.side_effect = [0x100, 0x90] # Dummy addresses for RSP
+        self.mapper.registers.read_reg.side_effect = [0x100, 0x90] # Dummy addresses for RSP    # type: ignore #tyo
         
         argv = ["arg1", "arg2"]
         addresses = self.mapper.push_arguments(argv)
@@ -169,9 +168,9 @@ class TestSegmentMapperStackAndLogic(unittest.TestCase):
         arg2_expected = (b"arg2" + b'\x00')[::-1]
         arg1_expected = (b"arg1" + b'\x00')[::-1]
         
-        self.mapper.memory.push.assert_any_call(arg2_expected)
-        self.mapper.memory.push.assert_any_call(arg1_expected)
-        self.mapper.memory.push.assert_any_call(b"\x00") 
+        self.mapper.memory.push.assert_any_call(arg2_expected)                                  # type: ignore #tyo
+        self.mapper.memory.push.assert_any_call(arg1_expected)                                  # type: ignore #tyo
+        self.mapper.memory.push.assert_any_call(b"\x00")                                        # type: ignore #tyo
         
         self.assertEqual(addresses, [0x100, 0x90])
 

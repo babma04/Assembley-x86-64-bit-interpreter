@@ -1,16 +1,15 @@
 import sys
-from helpers.storage import Storage
-from helpers.my_types import DataSectionInfo, BssSectionInfo, LabelMap, ConstantMap, FU
+from _src.helpers.my_types import DataSectionInfo, BssSectionInfo, LabelMap, ConstantMap, FU
 
-from bridges.data_memory import Data_Memory
+from _src.bridges.data_memory import Data_Memory
 
 from .patter_matching_helpers import INSTRUCTIONS
 from .segment_mapper import Segment_Mapper
 from .instruction_parser import Instruction_Parser, Operand
 
-from FUs.data_path import Data_Path
-from FUs.alu import ALU
-from FUs.fpu import FPU
+from _src.FUs.data_path import Data_Path
+from _src.FUs.alu import ALU
+from _src.FUs.fpu import FPU
 
 from exit_codes import ExitCode
 

@@ -12,6 +12,7 @@ __pycache__/
 *.py[cod]
 *$py.class
 program_cache/
+lib
 
 # OS specific
 .DS_Store

@@ -9,7 +9,7 @@ from .common_classes import Operand, Info
 
 from parsing.patter_matching_helpers import INSTRUCTIONS
 from parsing.instruction_parser import Operand as OP
-from conftest import PROJECT_ROOT
+from conftest import SRC_ROOT
 
 
 # Lookup opcodes table
@@ -19,7 +19,7 @@ class ALU:
 
     __slots__ = ["lib", "state"]
 
-    def __init__(self, registers: Registers_Interface, memory: Data_Memory, libops_path: str = os.path.join(PROJECT_ROOT, "lib/liboperations.so")) -> None:
+    def __init__(self, registers: Registers_Interface, memory: Data_Memory, libops_path: str = os.path.join(SRC_ROOT, "lib/liboperations.so")) -> None:
         self.lib = ctypes.CDLL(os.path.abspath(libops_path))
 
         self.lib.create_operand_state.argtypes = []

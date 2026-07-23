@@ -31,6 +31,7 @@ def _find_project_root(start_dir: str) -> str:
 
 
 PROJECT_ROOT = _find_project_root(os.path.dirname(os.path.abspath(__file__)))
+SRC_ROOT = os.path.join(PROJECT_ROOT, "_src/")
 CACHE_DIR = os.path.join(PROJECT_ROOT, "program_cache")
 BRIDGES_DIR = os.path.join(PROJECT_ROOT, "bridges")
 if BRIDGES_DIR not in sys.path:

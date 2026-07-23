@@ -5,7 +5,7 @@ import sys
 from parsing.patter_matching_helpers import INSTRUCTIONS
 
 from exit_codes import ExitCode
-from conftest import CACHE_DIR, PROJECT_ROOT
+from conftest import CACHE_DIR, SRC_ROOT
 
 class Storage:
     """
@@ -28,7 +28,7 @@ class Storage:
         :type use_cache: bool
         :return str: The resolved file path.
         """
-        base_dir = CACHE_DIR if use_cache else PROJECT_ROOT
+        base_dir = CACHE_DIR if use_cache else SRC_ROOT
         if use_cache and not os.path.exists(base_dir):
             os.makedirs(base_dir)
         return os.path.join(base_dir, file_name)

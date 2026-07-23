@@ -21,8 +21,8 @@ import sys
 import pytest
 
 import conftest
-from helpers import storage
-from helpers.storage import Storage
+from _src.helpers import storage
+from _src.helpers.storage import Storage
 
 
 @pytest.fixture(autouse=True)

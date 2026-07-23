@@ -1,7 +1,3 @@
-import sys
-
-from exit_codes import ExitCode
-
 from helpers.my_types import LabelMap
 
 from bridges.register_manager import Registers_Interface
