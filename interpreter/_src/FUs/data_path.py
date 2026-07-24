@@ -12,7 +12,12 @@ DATA_PATH_OPCODES = {name.lower(): index for index, name in enumerate(INSTRUCTIO
 
 class Data_Path:
     """
-    
+    Data Path component responsible for parsing, validating, and executing assembly
+    instructions related to data movement, stack management, and control flow operations.
+
+    Interfaces with register state, data memory, and label tables to execute 
+    instructions (e.g., MOV, LEA, PUSH, POP, CALL, RET, and conditional jumps) 
+    while maintaining instruction pointer (RIP) alignment and operand validation.
     """    
 
     __slots__ = ["registers", "memory", "labels", "op1", "op2", "opcode", "_execute_data_path_map", "rip"]
@@ -112,13 +117,13 @@ class Data_Path:
         """
         try:
             self.validate_data_path_instruction()
-            self._execute_data_path_map[self.opcode]()
+            return self._execute_data_path_map[self.opcode]()
         except SyntaxError as e:
             print(e)
-            raise RuntimeError
+            raise RuntimeError(e) from e
         except NotImplementedError as e:
             print(e)
-            raise RuntimeError
+            raise RuntimeError(e) from e
         
 
     # ----------------
@@ -154,7 +159,7 @@ class Data_Path:
         if opcode == 0:
             self.validate_lea_conditions()
         elif opcode == 1:
-                    self.validate_mov_conditions()
+            self.validate_mov_conditions()
         elif opcode == 2 or opcode == 3:
             self.validate_stack_condition()
         elif opcode == 4:
@@ -252,6 +257,9 @@ class Data_Path:
 
         if op1.type == 3 and self.opcode != 2:
             raise SyntaxError("Pop instruction requires a Register or a memory operator as arguments. No other operator type are supported")
+        
+        if self.opcode == 3 and op1.type == 2 and op1.address < 0x600000:
+            raise SyntaxError("The destination memory address lies in read-only memory (.rodata/.text) and cannot be written to.")
 
     def validate_call_condition(self) -> None:
         """
@@ -268,7 +276,8 @@ class Data_Path:
             raise SyntaxError("Call instructions cannot take a second operand.")
         if self.rip == -1:
             raise SyntaxError("RIP was not loaded.")
-        # Label verification is done at runtime
+        if op1.expression not in self.labels:
+            raise SyntaxError(f"Undefined label '{op1.expression}' for call instruction.")
     
     def validate_ret_condition(self) -> None:
             """
@@ -280,7 +289,7 @@ class Data_Path:
             op2 = self.op2
     
             if op1.is_valid() or op2.is_valid():
-                raise SyntaxError("Call instructions require no operands.")
+                raise SyntaxError("Ret instructions require no operands.")
         
 
     def validate_jump_conditions(self) -> None:
@@ -323,8 +332,8 @@ class Data_Path:
         # op1 is already verified to be a register
         try:
             self.registers.write_reg(op1.expression, effective_address)
-        except ValueError:
-            raise SyntaxError
+        except ValueError as e:
+            raise SyntaxError from e
 
     def execute_mov(self) -> None:
         """
@@ -344,29 +353,29 @@ class Data_Path:
         elif op2_type == 1:  # REGISTER
             try:
                 val = self.registers.read_reg(op2.expression)
-            except ValueError:
-                raise SyntaxError
+            except ValueError as e:
+                raise SyntaxError from e
         else:               # MEMORY (op2_type == 2)
             try:
                 val = self.memory.read_bytes(op2.address, op2.size)
-            except MemoryError:
-                raise SyntaxError
+            except MemoryError as e:
+                raise SyntaxError from e
 
         # 2. Write value to destination (op1)
         if op1.type == 1:    # REGISTER
             val = int.from_bytes(val, "little") if isinstance(val, bytes) else val
             try:
                 self.registers.write_reg(op1.expression, val)
-            except ValueError:
-                raise SyntaxError
+            except ValueError as e:
+                raise SyntaxError from e
         else:               # MEMORY 
             if isinstance(val, int):
                 mask = (1 << (size * 8)) - 1
                 val = (val & mask).to_bytes(size, byteorder="little")
             try:
                 self.memory.write_bytes(op1.address, val, op1.size)
-            except MemoryError:
-                raise SyntaxError  
+            except MemoryError as e:
+                raise SyntaxError from e
 
 
     def execute_push(self) -> None:
@@ -379,7 +388,7 @@ class Data_Path:
 
         op1 = self.op1
         op1_type = op1.type
-        size = op1.size
+        size = op1.size or 8
 
         # 1. Read value from source (op2)
         if op1_type == 3:    # IMMEDIATE
@@ -388,12 +397,12 @@ class Data_Path:
             try:
                 val = self.registers.read_reg(op1.expression)
             except ValueError as e:
-                raise RuntimeError(e)
+                raise RuntimeError(e) from e
         else:               # MEMORY (op2_type == 2)
             try:
                 val = self.memory.read_bytes(op1.address, op1.size)
             except MemoryError as e:
-                raise RuntimeError(e)
+                raise RuntimeError(e) from e
 
         if isinstance(val, int):
             mask = (1 << (size * 8)) - 1
@@ -402,7 +411,7 @@ class Data_Path:
         try:
             self.memory.push(val)
         except MemoryError as e:
-            raise RuntimeError(e)
+            raise RuntimeError(e) from e
 
     def execute_pop(self) -> None:
         """
@@ -419,20 +428,20 @@ class Data_Path:
         try:
             val = self.memory.pop()
         except MemoryError as e:
-            raise RuntimeError(e)
+            raise RuntimeError(e) from e
         
         if op1_type == 1:   # REGISTER
-            val = int.from_bytes(val, "little")
+            val = int.from_bytes(val, "little") if isinstance(val, bytes) else val
             try:
                 self.registers.write_reg(op1.expression, val, True if op1.is_signed else False)
             except ValueError as e:
-                raise RuntimeError(e)
+                raise RuntimeError(e) from e
 
         elif op1_type == 2: # MEMORY
             try:
                 self.memory.write_bytes(op1.address, val, op1.size)
             except MemoryError as e:
-                raise RuntimeError(e)
+                raise RuntimeError(e) from e
             
 
     def execute_call(self) -> int:
@@ -444,15 +453,14 @@ class Data_Path:
             :type label: str
             :raises RuntimeError: if the push operation runs into a stack overflow
             """
-            label = self.op1.expression
             try:
-                self.memory.push(bytes(self.rip + 1))
+                return_address_bytes = str(self.rip + 1).encode('utf-8')
+                self.memory.push(return_address_bytes)
             except MemoryError as e:
-                raise RuntimeError(e)
-            self.rip = -1
-            return self.labels[label]
+                raise RuntimeError(e) from e
+            return self.execute_jmp()
     
-    def execute_ret (self) -> int:
+    def execute_ret(self) -> int:
         """
         Jumps back to the address previously pushed by the 'call' operation.\n
         Stack management must be correct to work as intended.
@@ -460,98 +468,119 @@ class Data_Path:
         :raises RuntimeError: if the pop operation runs into a stack underflow
         """
         try:
-            return int(self.memory.pop().decode())
-        except MemoryError as e:
-            raise RuntimeError(e)
+            target_rip = int(self.memory.pop().decode('utf-8'))
+            self.rip = target_rip
+            return target_rip
+        except (MemoryError, ValueError) as e:
+            raise RuntimeError(e) from e
 
     
-    def execute_jmp (self) -> int:
+    def execute_jmp(self) -> int:
         try: 
-            return self.labels[self.op1.expression]
+            target_rip = self.labels[self.op1.expression]
+            self.rip = target_rip
+            return target_rip
         except KeyError: 
+            self.rip = -1
             return -1   
 
-    def execute_je(self) -> None:
+    def execute_je(self) -> int | None:
         """Jump if Equal / Jump if Zero (ZF == 1)."""
         if self.registers.read_zero():
-            self.execute_jmp()
+            return self.execute_jmp()
+        return None
 
-    def execute_jne(self) -> None:
+    def execute_jne(self) -> int | None:
         """Jump if Not Equal / Jump if Not Zero (ZF == 0)."""
         if not self.registers.read_zero():
-            self.execute_jmp()
+            return self.execute_jmp()
+        return None
 
-    def execute_jb(self) -> None:
+    def execute_jb(self) -> int | None:
         """Jump if Below / Jump if Carry (CF == 1). Unsigned comparison."""
         if self.registers.read_carry():
-            self.execute_jmp()
+            return self.execute_jmp()
+        return None
 
-    def execute_jnb(self) -> None:
+    def execute_jnb(self) -> int | None:
             """Jump if Not Below / Not Carry (CF == 0)."""
             if not self.registers.read_carry():
-                self.execute_jmp()
+                return self.execute_jmp()
+            return None
 
-    def execute_ja(self) -> None:
+    def execute_ja(self) -> int | None:
         """Jump if Above (CF == 0 and ZF == 0). Unsigned comparison."""
         if not self.registers.read_carry() and not self.registers.read_zero():
-            self.execute_jmp()
+            return self.execute_jmp()
+        return None
 
-    def execute_jbe(self) -> None:
+    def execute_jbe(self) -> int | None:
             """Jump if Below or Equal (CF == 1 or ZF == 1)."""
             if self.registers.read_carry() or self.registers.read_zero():
-                self.execute_jmp()
+                return self.execute_jmp()
+            return None
 
-    def execute_jl(self) -> None:
+    def execute_jl(self) -> int | None:
         """Jump if Less (SF != OF). Signed comparison."""
         sf = self.registers.read_sign()
         of = self.registers.read_overflow()
         if sf != of:
-            self.execute_jmp()
+            return self.execute_jmp()
+        return None
 
-    def execute_jg(self) -> None:
+    def execute_jg(self) -> int | None:
         """Jump if Greater (ZF == 0 and SF == OF). Signed comparison."""
         zf = self.registers.read_zero()
         sf = self.registers.read_sign()
         of = self.registers.read_overflow()
         if not zf and (sf == of):
-            self.execute_jmp()
+            return self.execute_jmp()
+        return None
 
-    def execute_jge(self) -> None:
+    def execute_jge(self) -> int | None:
             """Jump if Greater or Equal (SF == OF)."""
             if self.registers.read_sign() == self.registers.read_overflow():
-                self.execute_jmp()
+                return self.execute_jmp()
+            return None
 
-    def execute_jle(self) -> None:
+    def execute_jle(self) -> int | None:
         """Jump if Less or Equal (ZF == 1 or SF != OF)."""
         if self.registers.read_zero() or (self.registers.read_sign() != self.registers.read_overflow()):
-            self.execute_jmp()
+            return self.execute_jmp()
+        return None
 
-    def execute_js(self) -> None:
+    def execute_js(self) -> int | None:
         """Jump if Sign (SF == 1). Negative result."""
         if self.registers.read_sign():
-            self.execute_jmp()
+            return self.execute_jmp()
+        return None
 
-    def execute_jns(self) -> None:
+    def execute_jns(self) -> int | None:
         """Jump if Not Sign / Positive (SF == 0)."""
         if not self.registers.read_sign():
-            self.execute_jmp()
+            return self.execute_jmp()
+        return None
 
-    def execute_jo(self) -> None:
+    def execute_jo(self) -> int | None:
         """Jump if Overflow (OF == 1)."""
         if self.registers.read_overflow():
-            self.execute_jmp()
+            return self.execute_jmp()
+        return None
     
-    def execute_jno(self) -> None:
+    def execute_jno(self) -> int | None:
             """Jump if Overflow (OF == 1)."""
             if not self.registers.read_overflow():
-                self.execute_jmp()
+                return self.execute_jmp()
+            return None
 
-    def execute_jp(self) -> None:
+    def execute_jp(self) -> int | None:
         """Jump if Parity Even (PF == 1)."""
         if self.registers.read_parity():
-            self.execute_jmp()
+            return self.execute_jmp()
+        return None
 
-    def execute_jnp(self) -> None:
+    def execute_jnp(self) -> int | None:
         """Jump if Parity Odd (PF == 0)."""
         if not self.registers.read_parity():
-            self.execute_jmp()
+            return self.execute_jmp()
+        return None
