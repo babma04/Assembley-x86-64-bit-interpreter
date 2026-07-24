@@ -1,4 +1,6 @@
 import sys
+import re
+
 from ...exit_codes import ExitCode
 from . import patter_matching_helpers as PM
 
@@ -71,12 +73,13 @@ class Operand:
 
 class Instruction_Parser:
     
-    __slots__ = ("op1","op2","line", "rip")
+    __slots__ = ("op1","op2","line", "rip", "expected_op_count")
 
     def __init__ (self, op1: Operand, op2: Operand, expected_op_count: int = 0, line: list[str]=[]):
         self.op1: Operand = op1
-        self.op2: Operand
+        self.op2: Operand = op2
         self.line = line
+        self.expected_op_count = expected_op_count
         self.rip: int = -1 # Reset immediately before any call to parser
     
 
